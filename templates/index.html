@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>台灣上市公司市值追蹤</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<style>
+:root{
+  --bg:#0f172a;--surface:#1e293b;--surface2:#334155;
+  --text:#e2e8f0;--muted:#94a3b8;
+  --green:#22c55e;--red:#ef4444;--blue:#3b82f6;--yellow:#f59e0b;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh}
+.navbar{background:var(--surface)!important;border-bottom:1px solid var(--surface2)}
+.navbar-brand{font-weight:700;font-size:1.1rem;color:var(--text)!important}
+.card{background:var(--surface);border:1px solid var(--surface2);border-radius:12px}
+.card-sm{padding:1rem 1.25rem}
+.stat-label{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.stat-value{font-size:1.5rem;font-weight:700;line-height:1.2;margin-top:.2rem}
+.up{color:var(--green)}.down{color:var(--red)}.flat{color:var(--muted)}
+.badge-up{background:rgba(34,197,94,.15);color:var(--green);border-radius:6px;padding:2px 8px;font-size:.8rem}
+.badge-down{background:rgba(239,68,68,.15);color:var(--red);border-radius:6px;padding:2px 8px;font-size:.8rem}
+.badge-flat{background:rgba(148,163,184,.1);color:var(--muted);border-radius:6px;padding:2px 8px;font-size:.8rem}
+table.dataTable thead th{background:var(--surface2);color:var(--muted);font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;border:none!important}
+table.dataTable tbody tr{background:var(--surface)!important;border-bottom:1px solid var(--surface2)!important}
+table.dataTable tbody tr:hover{background:var(--surface2)!important}
+table.dataTable td{color:var(--text);font-size:.87rem;border:none!important;padding:.65rem .75rem!important}
+.dataTables_wrapper .dataTables_filter input{background:var(--surface2);color:var(--text);border:1px solid var(--surface2);border-radius:8px;padding:.3rem .6rem}
+.dataTables_wrapper .dataTables_length select{background:var(--surface2);color:var(--text);border:1px solid var(--surface2);border-radius:6px}
+.dataTables_wrapper .dataTables_info,.dataTables_wrapper .dataTables_paginate{color:var(--muted);font-size:.82rem}
+.page-link{background:var(--surface2)!important;border-color:var(--surface2)!important;color:var(--text)!important}
+.page-item.active .page-link{background:var(--blue)!important;border-color:var(--blue)!important}
+.btn-refresh{background:var(--blue);border:none;color:#fff;border-radius:8px;padding:.4rem .9rem;font-size:.85rem;cursor:pointer}
+.btn-refresh:hover{background:#2563eb}
+.btn-refresh:disabled{opacity:.5;cursor:wait}
+.date-select{background:var(--surface2);color:var(--text);border:1px solid var(--surface2);border-radius:8px;padding:.35rem .7rem;font-size:.85rem}
+.rank-badge{display:inline-block;width:2rem;text-align:center;background:var(--surface2);border-radius:5px;font-size:.78rem;color:var(--muted);font-weight:600}
+.rank-badge.top3{background:rgba(245,158,11,.2);color:var(--yellow)}
+.stock-link{color:var(--text);text-decoration:none;font-weight:600}
+.stock-link:hover{color:var(--blue)}
+.chart-box{background:var(--surface);border:1px solid var(--surface2);border-radius:12px;padding:1rem}
+.section-title{font-size:.85rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.75rem}
+.loading-overlay{position:fixed;inset:0;background:rgba(15,23,42,.85);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(4px)}
+.spinner{width:3rem;height:3rem;border:3px solid var(--surface2);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.modal-content{background:var(--surface);border:1px solid var(--surface2);color:var(--text)}
+.modal-header{border-bottom:1px solid var(--surface2)}
+.modal-footer{border-top:1px solid var(--surface2)}
+#stockChart canvas{max-height:220px}
+.alert-info-dark{background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);color:#93c5fd;border-radius:8px;padding:.6rem 1rem;font-size:.83rem}
+</style>
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg">
+  <div class="container-fluid px-4">
+    <span class="navbar-brand">
+      <i class="fa-solid fa-chart-line me-2" style="color:var(--blue)"></i>
+      台灣上市公司市值追蹤
+    </span>
+    <div class="d-flex align-items-center gap-3 ms-auto">
+      <select id="dateSelect" class="date-select" title="選擇日期"></select>
+      <button id="refreshBtn" class="btn-refresh" onclick="refreshData()">
+        <i class="fa-solid fa-rotate-right me-1"></i>更新資料
+      </button>
+    </div>
+  </div>
+</nav>
+
+<!-- Loading overlay -->
+<div id="loadingOverlay" class="loading-overlay">
+  <div class="text-center">
+    <div class="spinner mx-auto mb-3"></div>
+    <div style="color:var(--muted);font-size:.9rem" id="loadingMsg">載入中…</div>
+  </div>
+</div>
+
+<!-- Main -->
+<div class="container-fluid px-4 py-4">
+
+  <!-- Summary cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card card-sm">
+        <div class="stat-label">總市值</div>
+        <div class="stat-value" id="totalCap">—</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card card-sm">
+        <div class="stat-label">上漲家數</div>
+        <div class="stat-value up" id="upCount">—</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card card-sm">
+        <div class="stat-label">下跌家數</div>
+        <div class="stat-value down" id="downCount">—</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card card-sm">
+        <div class="stat-label">上市家數</div>
+        <div class="stat-value" id="totalCount">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-6">
+      <div class="chart-box">
+        <div class="section-title"><i class="fa-solid fa-arrow-trend-up me-1" style="color:var(--green)"></i>市值增加前10名</div>
+        <canvas id="gainersChart"></canvas>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="chart-box">
+        <div class="section-title"><i class="fa-solid fa-arrow-trend-down me-1" style="color:var(--red)"></i>市值減少前10名</div>
+        <canvas id="losersChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- No market cap warning -->
+  <div id="noCapWarning" class="alert-info-dark mb-3 d-none">
+    <i class="fa-solid fa-circle-info me-2"></i>
+    目前顯示的是從 TWSE 備援資料，市值欄位需要 FinMind API 才能計算。
+    可設定 <code>FINMIND_TOKEN</code> 後點擊「更新資料」。
+  </div>
+
+  <!-- Data table -->
+  <div class="card p-3">
+    <div class="section-title mb-2"><i class="fa-solid fa-table me-1"></i>完整排行榜</div>
+    <table id="mainTable" class="table table-sm" style="width:100%">
+      <thead>
+        <tr>
+          <th>排名</th>
+          <th>代號</th>
+          <th>公司名稱</th>
+          <th>收盤價</th>
+          <th>市值 (億)</th>
+          <th>市值變化 (億)</th>
+          <th>漲跌幅</th>
+          <th>股價漲跌</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Stock history modal -->
+<div class="modal fade" id="stockModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="stockModalTitle">市值走勢</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="stockChart"><canvas id="historyCanvas"></canvas></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">關閉</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const UNITS = 1e8;  // 億
+
+function fmtCap(v) {
+  if (!v || v === 0) return '—';
+  const yi = v / UNITS;
+  if (yi >= 10000) return (yi / 10000).toFixed(2) + ' 兆';
+  if (yi >= 1) return yi.toFixed(2) + ' 億';
+  return (v / 1e4).toFixed(0) + ' 萬';
+}
+
+function fmtCapChange(v) {
+  if (v === 0 || v === null || v === undefined) return '<span class="flat">—</span>';
+  const yi = v / UNITS;
+  const sign = v > 0 ? '+' : '';
+  const cls = v > 0 ? 'up' : 'down';
+  return `<span class="${cls}">${sign}${yi.toFixed(2)} 億</span>`;
+}
+
+function fmtPct(v) {
+  if (v === 0 || v === null || v === undefined) return '<span class="badge-flat">0.00%</span>';
+  const sign = v > 0 ? '+' : '';
+  const cls = v > 0 ? 'badge-up' : 'badge-down';
+  return `<span class="${cls}">${sign}${v.toFixed(2)}%</span>`;
+}
+
+function fmtPrice(v) {
+  if (!v) return '—';
+  return v.toLocaleString('zh-TW', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function fmtPriceChange(v) {
+  if (!v) return '<span class="flat">—</span>';
+  const sign = v > 0 ? '+' : '';
+  const cls = v > 0 ? 'up' : v < 0 ? 'down' : 'flat';
+  return `<span class="${cls}">${sign}${v.toFixed(2)}</span>`;
+}
+
+function rankBadge(r) {
+  const top = r <= 3 ? ' top3' : '';
+  return `<span class="rank-badge${top}">${r || '—'}</span>`;
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let table = null;
+let gainChart = null, loseChart = null, histChart = null;
+let currentData = [];
+
+// ── Chart defaults ─────────────────────────────────────────────────────────
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.borderColor = '#334155';
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+
+// ── Init DataTable ──────────────────────────────────────────────────────────
+function initTable() {
+  table = $('#mainTable').DataTable({
+    data: [],
+    columns: [
+      { data: 'market_cap_rank' },
+      { data: 'stock_id' },
+      { data: 'stock_name' },
+      { data: 'close_price' },
+      { data: 'market_cap' },
+      { data: 'cap_change' },
+      { data: 'cap_change_pct' },
+      { data: 'price_change' },
+    ],
+    columnDefs: [
+      { targets: 0, render: d => rankBadge(d), className: 'text-center' },
+      { targets: 1, render: (d, _, row) =>
+        `<a href="#" class="stock-link" onclick="showHistory('${d}','${row.stock_name}');return false">${d}</a>` },
+      { targets: 3, render: d => fmtPrice(d) },
+      { targets: 4, render: d => fmtCap(d) },
+      { targets: 5, render: d => fmtCapChange(d) },
+      { targets: 6, render: d => fmtPct(d) },
+      { targets: 7, render: d => fmtPriceChange(d) },
+    ],
+    order: [[4, 'desc']],
+    pageLength: 50,
+    lengthMenu: [25, 50, 100, 200],
+    language: {
+      search: '搜尋：', lengthMenu: '顯示 _MENU_ 筆',
+      info: '第 _START_–_END_ 筆，共 _TOTAL_ 筆',
+      paginate: { previous: '‹', next: '›' },
+      zeroRecords: '無資料', infoEmpty: '無資料',
+    },
+    dom: "<'row mb-2'<'col-sm-6'l><'col-sm-6'f>>rt<'row mt-2'<'col-sm-5'i><'col-sm-7'p>>",
+  });
+}
+
+// ── Load dates ───────────────────────────────────────────────────────────────
+async function loadDates() {
+  const res = await fetch('/api/dates');
+  const dates = await res.json();
+  const sel = document.getElementById('dateSelect');
+  sel.innerHTML = dates.map(d => `<option value="${d}">${d}</option>`).join('');
+  if (dates.length) loadData(dates[0]);
+  else {
+    document.getElementById('loadingOverlay').style.display = 'none';
+    document.getElementById('noCapWarning').classList.remove('d-none');
+  }
+}
+
+// ── Load market cap data ──────────────────────────────────────────────────────
+async function loadData(dateStr) {
+  showLoading(`載入 ${dateStr} 資料…`);
+  try {
+    const res = await fetch(`/api/market-cap?date=${dateStr}`);
+    const json = await res.json();
+    if (json.error) { alert(json.error); hideLoading(); return; }
+
+    currentData = json.data;
+
+    // Summary
+    const s = json.summary;
+    document.getElementById('totalCap').textContent = fmtCap(s.total_market_cap);
+    document.getElementById('upCount').textContent = s.up_count ?? '—';
+    document.getElementById('downCount').textContent = s.down_count ?? '—';
+    document.getElementById('totalCount').textContent = s.total ?? '—';
+
+    // Check if market cap data exists
+    const hasMarketCap = currentData.some(r => r.market_cap > 0);
+    document.getElementById('noCapWarning').classList.toggle('d-none', hasMarketCap);
+
+    // Table
+    if (table) {
+      table.clear().rows.add(currentData).draw();
+    }
+
+    // Charts
+    renderTopCharts(currentData);
+  } catch (e) {
+    console.error(e);
+  } finally {
+    hideLoading();
+  }
+}
+
+// ── Bar charts ────────────────────────────────────────────────────────────────
+function renderTopCharts(data) {
+  const sorted = [...data].filter(r => r.market_cap > 0 && r.cap_change !== undefined);
+
+  const gainers = [...sorted].sort((a,b) => b.cap_change_pct - a.cap_change_pct).slice(0, 10);
+  const losers  = [...sorted].sort((a,b) => a.cap_change_pct - b.cap_change_pct).slice(0, 10);
+
+  renderBar('gainersChart', gainers, '#22c55e', gainChart, c => gainChart = c);
+  renderBar('losersChart',  losers,  '#ef4444', loseChart, c => loseChart = c);
+}
+
+function renderBar(canvasId, data, color, existing, setter) {
+  if (existing) existing.destroy();
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  setter(new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: data.map(r => `${r.stock_id} ${r.stock_name}`),
+      datasets: [{
+        data: data.map(r => parseFloat(r.cap_change_pct) || 0),
+        backgroundColor: color + '99',
+        borderColor: color,
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      plugins: { legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.x.toFixed(2)}%` } }
+      },
+      scales: {
+        x: { grid: { color: '#334155' }, ticks: { callback: v => v+'%' } },
+        y: { grid: { display: false }, ticks: { font: { size: 11 } } },
+      }
+    }
+  }));
+}
+
+// ── Stock history modal ───────────────────────────────────────────────────────
+async function showHistory(stockId, stockName) {
+  document.getElementById('stockModalTitle').textContent = `${stockId} ${stockName} — 市值走勢`;
+  const modal = new bootstrap.Modal(document.getElementById('stockModal'));
+  modal.show();
+
+  const res = await fetch(`/api/stock/${stockId}/history`);
+  const history = await res.json();
+
+  if (histChart) histChart.destroy();
+  const ctx = document.getElementById('historyCanvas').getContext('2d');
+  histChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: history.map(r => r.date),
+      datasets: [
+        {
+          label: '市值 (億)',
+          data: history.map(r => r.market_cap > 0 ? (r.market_cap/1e8).toFixed(2) : null),
+          borderColor: '#3b82f6',
+          backgroundColor: 'rgba(59,130,246,.1)',
+          fill: true,
+          tension: .3,
+          pointRadius: 3,
+          yAxisID: 'y',
+        },
+        {
+          label: '收盤價',
+          data: history.map(r => r.close_price),
+          borderColor: '#f59e0b',
+          tension: .3,
+          pointRadius: 3,
+          yAxisID: 'y2',
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: true } },
+      scales: {
+        y:  { position: 'left',  grid: { color:'#334155' }, title: { display: true, text: '市值 (億)' } },
+        y2: { position: 'right', grid: { display: false }, title: { display: true, text: '收盤價 (元)' } },
+        x:  { grid: { color:'#334155' } },
+      }
+    }
+  });
+}
+
+// ── Refresh data ──────────────────────────────────────────────────────────────
+async function refreshData() {
+  const btn = document.getElementById('refreshBtn');
+  btn.disabled = true;
+  const dateStr = document.getElementById('dateSelect').value;
+  showLoading(`重新抓取 ${dateStr} 資料…`);
+
+  try {
+    await fetch('/api/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: dateStr })
+    });
+    // Wait a bit for background task then reload
+    setTimeout(() => {
+      loadDates().then(() => {
+        document.getElementById('dateSelect').value = dateStr;
+        loadData(dateStr);
+      });
+    }, 5000);
+  } catch(e) {
+    hideLoading();
+    btn.disabled = false;
+  }
+}
+
+// ── UI helpers ────────────────────────────────────────────────────────────────
+function showLoading(msg) {
+  document.getElementById('loadingMsg').textContent = msg || '載入中…';
+  document.getElementById('loadingOverlay').style.display = 'flex';
+}
+function hideLoading() {
+  document.getElementById('loadingOverlay').style.display = 'none';
+  document.getElementById('refreshBtn').disabled = false;
+}
+
+// ── Date selector ─────────────────────────────────────────────────────────────
+document.getElementById('dateSelect').addEventListener('change', function() {
+  loadData(this.value);
+});
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+initTable();
+loadDates();
+</script>
+</body>
+</html>

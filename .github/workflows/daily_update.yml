@@ -1,0 +1,25 @@
+name: Daily Market Cap Update
+
+on:
+  schedule:
+    # 台灣時間下午 5:30（收盤後資料更新完成），weekdays
+    - cron: '30 9 * * 1-5'
+  workflow_dispatch:   # 允許手動觸發
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install yfinance requests psycopg2-binary
+
+      - name: Fetch today's market cap data
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python daily_fetch.py
