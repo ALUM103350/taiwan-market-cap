@@ -199,7 +199,8 @@ function fmtCapChange(v) {
 }
 
 function fmtPct(v) {
-  if (v === 0 || v === null || v === undefined) return '<span class="badge-flat">0.00%</span>';
+  v = parseFloat(v);
+  if (!v || isNaN(v)) return '<span class="badge-flat">0.00%</span>';
   const sign = v > 0 ? '+' : '';
   const cls = v > 0 ? 'badge-up' : 'badge-down';
   return `<span class="${cls}">${sign}${v.toFixed(2)}%</span>`;
