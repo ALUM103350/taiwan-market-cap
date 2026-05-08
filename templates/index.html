@@ -139,6 +139,31 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
     </div>
   </div>
 
+  <!-- Comparison chart -->
+  <div class="card p-3 mb-4">
+    <div class="section-title"><i class="fa-solid fa-chart-line me-1" style="color:var(--accent)"></i>個股市值比較</div>
+    <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+      <input id="compareInput" type="text" placeholder="輸入股票代號（如 2330）" autocomplete="off"
+        class="date-select" style="width:200px"
+        onkeydown="if(event.key==='Enter')addCompare()">
+      <button class="btn-refresh" onclick="addCompare()" style="padding:.38rem .9rem">
+        <i class="fa-solid fa-plus me-1"></i>加入
+      </button>
+      <select id="compareDays" class="date-select" onchange="refreshCompare()" style="width:100px">
+        <option value="10">10天</option>
+        <option value="30" selected>30天</option>
+        <option value="60">60天</option>
+      </select>
+      <div id="compareTags" class="d-flex flex-wrap gap-1"></div>
+    </div>
+    <div style="position:relative;height:280px">
+      <canvas id="compareChart"></canvas>
+      <div id="compareEmpty" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.9rem">
+        輸入股票代號加入比較
+      </div>
+    </div>
+  </div>
+
   <!-- No market cap warning -->
   <div id="noCapWarning" class="alert-info-dark mb-3 d-none">
     <i class="fa-solid fa-circle-info me-2"></i>
@@ -459,6 +484,108 @@ function hideLoading() {
 document.getElementById('dateSelect').addEventListener('change', function() {
   loadData(this.value);
 });
+
+// ── Comparison chart ──────────────────────────────────────────────────────────
+const COMPARE_COLORS = ['#00c805','#ff5000','#3b82f6','#f59e0b','#a855f7','#ec4899','#14b8a6','#f97316'];
+let compareStocks = [];  // [{id, name}]
+let compareChart = null;
+
+async function addCompare() {
+  const input = document.getElementById('compareInput');
+  const sid = input.value.trim();
+  if (!sid) return;
+  if (compareStocks.find(s => s.id === sid)) { input.value=''; return; }
+  if (compareStocks.length >= 8) { alert('最多比較 8 支股票'); return; }
+
+  // Fetch to verify stock exists
+  const days = document.getElementById('compareDays').value;
+  const res = await fetch(`/api/stock/${sid}/history?days=${days}`);
+  const hist = await res.json();
+  if (!hist.length) { alert(`找不到股票代號 ${sid}`); return; }
+
+  const name = hist[0].stock_name || sid;
+  compareStocks.push({ id: sid, name });
+  input.value = '';
+  renderCompareTags();
+  await refreshCompare();
+}
+
+function removeCompare(sid) {
+  compareStocks = compareStocks.filter(s => s.id !== sid);
+  renderCompareTags();
+  refreshCompare();
+}
+
+function renderCompareTags() {
+  const el = document.getElementById('compareTags');
+  el.innerHTML = compareStocks.map((s, i) =>
+    `<span style="background:${COMPARE_COLORS[i]}22;color:${COMPARE_COLORS[i]};border:1px solid ${COMPARE_COLORS[i]}44;
+      border-radius:20px;padding:2px 10px;font-size:.8rem;cursor:pointer;white-space:nowrap"
+      onclick="removeCompare('${s.id}')">
+      ${s.id} ${s.name} ✕
+    </span>`
+  ).join('');
+}
+
+async function refreshCompare() {
+  const days = document.getElementById('compareDays').value;
+  const empty = document.getElementById('compareEmpty');
+
+  if (!compareStocks.length) {
+    if (compareChart) { compareChart.destroy(); compareChart = null; }
+    empty.style.display = 'flex';
+    return;
+  }
+  empty.style.display = 'none';
+
+  // Fetch history for all stocks in parallel
+  const allData = await Promise.all(
+    compareStocks.map(s =>
+      fetch(`/api/stock/${s.id}/history?days=${days}`)
+        .then(r => r.json())
+        .then(h => ({ ...s, history: h }))
+    )
+  );
+
+  // Union of all dates
+  const dateSet = new Set();
+  allData.forEach(s => s.history.forEach(r => dateSet.add(r.date)));
+  const labels = [...dateSet].sort();
+
+  const datasets = allData.map((s, i) => {
+    const byDate = Object.fromEntries(s.history.map(r => [r.date, r.market_cap]));
+    return {
+      label: `${s.id} ${s.name}`,
+      data: labels.map(d => byDate[d] ? (byDate[d] / 1e8).toFixed(1) : null),
+      borderColor: COMPARE_COLORS[i],
+      backgroundColor: COMPARE_COLORS[i] + '18',
+      fill: false,
+      tension: .3,
+      pointRadius: 3,
+      spanGaps: true,
+    };
+  });
+
+  if (compareChart) compareChart.destroy();
+  const ctx = document.getElementById('compareChart').getContext('2d');
+  compareChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#f5f5f5', boxWidth: 12, font: { size: 12 } } },
+        tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${c.parsed.y} 億` } }
+      },
+      scales: {
+        x: { grid: { color: '#1e1e1e' }, ticks: { maxTicksLimit: 10 } },
+        y: { grid: { color: '#1e1e1e' }, ticks: { callback: v => v + ' 億' } }
+      }
+    }
+  });
+}
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 initTable();

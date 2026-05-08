@@ -157,7 +157,7 @@ class Database:
         with self.get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT date, close_price, market_cap, market_cap_rank
+                    SELECT date, stock_name, close_price, market_cap, market_cap_rank
                     FROM market_cap
                     WHERE stock_id = %s
                     ORDER BY date DESC LIMIT %s

@@ -145,7 +145,7 @@ class Database:
     def get_stock_history(self, stock_id, days=60):
         with self.get_conn() as conn:
             cur = conn.execute("""
-                SELECT date, close_price, market_cap, market_cap_rank
+                SELECT date, stock_name, close_price, market_cap, market_cap_rank
                 FROM market_cap
                 WHERE stock_id = ?
                 ORDER BY date DESC LIMIT ?
