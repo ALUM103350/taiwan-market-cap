@@ -762,24 +762,50 @@ function renderAlertBanner(selectedDate) {
 
   if (!dateAlerts.length) { banner.style.display = 'none'; return; }
 
-  content.innerHTML =
-    `<span style="color:var(--accent);font-size:.78rem;font-weight:700;letter-spacing:.05em;white-space:nowrap">
-       <i class="fa-solid fa-bell me-1"></i>${selectedDate} 異動
-     </span>` +
-    dateAlerts.map(a => {
-      const wCap = (a.winner_cap / 1e8).toFixed(0);
-      const lCap = (a.loser_cap  / 1e8).toFixed(0);
-      const tierColor = a.tier === '兆' ? '#a78bfa' : a.tier === '五千億' ? '#38bdf8' : '#fb923c';
-      return `
-        <span style="background:rgba(0,200,5,.08);border:1px solid rgba(0,200,5,.25);
-          border-radius:8px;padding:3px 11px;font-size:.8rem;white-space:nowrap">
-          <span style="background:${tierColor}22;color:${tierColor};border-radius:4px;padding:1px 6px;font-size:.7rem;margin-right:5px">${a.tier}</span>
-          <span style="color:var(--green);font-weight:700">${a.winner_id} ${a.winner_name}</span>
-          <span style="color:var(--muted);margin:0 5px">超越</span>
-          <span style="color:var(--red)">${a.loser_id} ${a.loser_name}</span>
-          <span style="color:var(--muted);font-size:.72rem;margin-left:6px">${parseInt(wCap).toLocaleString()} vs ${parseInt(lCap).toLocaleString()} 億</span>
-        </span>`;
-    }).join('');
+  // ── Count how many times each winner surpassed others ──
+  const winCount = {};
+  dateAlerts.forEach(a => {
+    const key = `${a.winner_id}|${a.winner_name}`;
+    winCount[key] = (winCount[key] || 0) + 1;
+  });
+  const topWinners = Object.entries(winCount)
+    .sort((a, b) => b[1] - a[1]);
+
+  const summaryHtml = topWinners.map(([key, n]) => {
+    const [id, name] = key.split('|');
+    return `<span style="background:rgba(0,200,5,.12);border:1px solid rgba(0,200,5,.3);
+      border-radius:20px;padding:2px 10px;font-size:.78rem;white-space:nowrap;display:inline-flex;align-items:center;gap:5px">
+      <span style="color:var(--green);font-weight:700">${id} ${name}</span>
+      <span style="background:var(--accent);color:#000;border-radius:10px;padding:0 6px;font-size:.72rem;font-weight:800">${n}次</span>
+    </span>`;
+  }).join('');
+
+  // ── Detail rows ──
+  const detailHtml = dateAlerts.map(a => {
+    const wCap = (a.winner_cap / 1e8).toFixed(0);
+    const lCap = (a.loser_cap  / 1e8).toFixed(0);
+    const tierColor = a.tier === '兆' ? '#a78bfa' : a.tier === '五千億' ? '#38bdf8' : '#fb923c';
+    return `
+      <span style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
+        border-radius:8px;padding:3px 10px;font-size:.78rem;white-space:nowrap">
+        <span style="background:${tierColor}22;color:${tierColor};border-radius:4px;padding:1px 5px;font-size:.68rem;margin-right:4px">${a.tier}</span>
+        <span style="color:var(--green);font-weight:600">${a.winner_id} ${a.winner_name}</span>
+        <span style="color:var(--muted);margin:0 4px;font-size:.75rem">超越</span>
+        <span style="color:var(--red)">${a.loser_id} ${a.loser_name}</span>
+        <span style="color:var(--muted);font-size:.7rem;margin-left:5px">${parseInt(wCap).toLocaleString()} vs ${parseInt(lCap).toLocaleString()} 億</span>
+      </span>`;
+  }).join('');
+
+  content.innerHTML = `
+    <div style="width:100%">
+      <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.4rem">
+        <span style="color:var(--accent);font-size:.78rem;font-weight:700;letter-spacing:.05em;white-space:nowrap">
+          <i class="fa-solid fa-bell me-1"></i>${selectedDate} 異動統計
+        </span>
+        ${summaryHtml}
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:.35rem">${detailHtml}</div>
+    </div>`;
   banner.style.display = 'block';
 }
 
