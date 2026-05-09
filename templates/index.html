@@ -757,7 +757,7 @@ async function loadAlerts() {
         todayAlerts.map(a => {
           const wCap = (a.winner_cap / 1e8).toFixed(0);
           const lCap = (a.loser_cap  / 1e8).toFixed(0);
-          const tierColor = a.tier === '兆' ? '#a78bfa' : '#38bdf8';
+          const tierColor = a.tier === '兆' ? '#a78bfa' : a.tier === '五千億' ? '#38bdf8' : '#fb923c';
           return `
             <span style="background:rgba(0,200,5,.08);border:1px solid rgba(0,200,5,.25);
               border-radius:8px;padding:3px 11px;font-size:.8rem;white-space:nowrap">
