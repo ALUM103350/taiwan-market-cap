@@ -365,7 +365,7 @@ async function loadDates() {
   const dates = await res.json();
   const sel = document.getElementById('dateSelect');
   sel.innerHTML = dates.map(d => `<option value="${d}">${d}</option>`).join('');
-  if (dates.length) loadData(dates[0]);
+  if (dates.length) { loadData(dates[0]); loadAlerts(dates[0]); }
   else {
     document.getElementById('loadingOverlay').style.display = 'none';
     document.getElementById('noCapWarning').classList.remove('d-none');
@@ -535,6 +535,8 @@ function hideLoading() {
 // ── Date selector ─────────────────────────────────────────────────────────────
 document.getElementById('dateSelect').addEventListener('change', function() {
   loadData(this.value);
+  renderAlertBanner(this.value);
+  renderAlertHistory(this.value);
 });
 
 // ── Free comparison chart ─────────────────────────────────────────────────────
@@ -737,88 +739,95 @@ async function refreshCompare() {
 }
 
 // ── Trillion alerts ───────────────────────────────────────────────────────────
-async function loadAlerts() {
+let _allAlerts = [];  // cached once
+
+async function loadAlerts(selectedDate) {
   try {
-    const res = await fetch('/api/alerts');
-    const alerts = await res.json();
-    if (!alerts.length) return;
-
-    const latestDate = alerts[0].date;
-    const todayAlerts = alerts.filter(a => a.date === latestDate);
-
-    // ── Top banner: today's crossovers ──
-    const banner  = document.getElementById('alertBanner');
-    const content = document.getElementById('alertContent');
-    if (todayAlerts.length) {
-      content.innerHTML =
-        `<span style="color:var(--accent);font-size:.78rem;font-weight:700;letter-spacing:.05em;white-space:nowrap">
-           <i class="fa-solid fa-bell me-1"></i>今日異動
-         </span>` +
-        todayAlerts.map(a => {
-          const wCap = (a.winner_cap / 1e8).toFixed(0);
-          const lCap = (a.loser_cap  / 1e8).toFixed(0);
-          const tierColor = a.tier === '兆' ? '#a78bfa' : a.tier === '五千億' ? '#38bdf8' : '#fb923c';
-          return `
-            <span style="background:rgba(0,200,5,.08);border:1px solid rgba(0,200,5,.25);
-              border-radius:8px;padding:3px 11px;font-size:.8rem;white-space:nowrap">
-              <span style="background:${tierColor}22;color:${tierColor};border-radius:4px;padding:1px 6px;font-size:.7rem;margin-right:5px">${a.tier}</span>
-              <span style="color:var(--muted);font-size:.72rem;margin-right:5px">${a.date}</span>
-              <span style="color:var(--green);font-weight:700">${a.winner_id} ${a.winner_name}</span>
-              <span style="color:var(--muted);margin:0 5px">超越</span>
-              <span style="color:var(--red)">${a.loser_id} ${a.loser_name}</span>
-              <span style="color:var(--muted);font-size:.72rem;margin-left:6px">${parseInt(wCap).toLocaleString()} vs ${parseInt(lCap).toLocaleString()} 億</span>
-            </span>`;
-        }).join('');
-      banner.style.display = 'block';
+    // Fetch once, cache
+    if (!_allAlerts.length) {
+      const res = await fetch('/api/alerts');
+      _allAlerts = await res.json();
     }
+    if (!_allAlerts.length) return;
 
-    // ── History table: all crossovers ──
-    const card = document.getElementById('alertHistoryCard');
-    const body = document.getElementById('alertHistoryBody');
-    const count = document.getElementById('alertHistoryCount');
-    count.textContent = `共 ${alerts.length} 筆`;
-
-    body.innerHTML = alerts.map((a, idx) => {
-      const wCap      = (a.winner_cap / 1e8).toFixed(0);
-      const lCap      = (a.loser_cap  / 1e8).toFixed(0);
-      const diff      = ((a.winner_cap - a.loser_cap) / 1e8).toFixed(0);
-      const isNew     = a.date === latestDate;
-      const bg        = idx % 2 === 0 ? 'background:#0f1e5a' : 'background:#0b1746';
-      const tierColor = a.tier === '兆' ? '#a78bfa' : '#38bdf8';
-      return `
-        <tr style="${bg};border-bottom:1px solid #162266">
-          <td style="padding:.55rem .75rem;white-space:nowrap;color:var(--muted);font-size:.78rem">
-            ${isNew ? '<span style="background:rgba(0,200,5,.15);color:var(--green);border-radius:4px;padding:1px 6px;font-size:.7rem;margin-right:4px">NEW</span>' : ''}
-            ${a.date}
-          </td>
-          <td style="padding:.55rem .5rem;white-space:nowrap">
-            <span style="background:${tierColor}22;color:${tierColor};border-radius:4px;padding:1px 6px;font-size:.7rem">${a.tier}</span>
-          </td>
-          <td style="padding:.55rem .75rem">
-            <span style="color:var(--green);font-weight:600">${a.winner_id}</span>
-            <span style="color:#8899cc;margin-left:4px;font-size:.82rem">${a.winner_name}</span>
-            <span style="color:var(--muted);font-size:.75rem;margin-left:6px">${parseInt(wCap).toLocaleString()} 億</span>
-          </td>
-          <td style="padding:.55rem .5rem;text-align:center;color:var(--accent);font-size:.8rem">超越</td>
-          <td style="padding:.55rem .75rem">
-            <span style="color:var(--red)">${a.loser_id}</span>
-            <span style="color:#8899cc;margin-left:4px;font-size:.82rem">${a.loser_name}</span>
-            <span style="color:var(--muted);font-size:.75rem;margin-left:6px">${parseInt(lCap).toLocaleString()} 億</span>
-          </td>
-          <td style="padding:.55rem .75rem;text-align:right;color:var(--muted);font-size:.78rem;white-space:nowrap">
-            +${parseInt(diff).toLocaleString()} 億
-          </td>
-        </tr>`;
-    }).join('');
-
-    card.style.display = 'block';
+    renderAlertBanner(selectedDate);
+    renderAlertHistory(selectedDate);
   } catch(e) { console.error('alerts error', e); }
+}
+
+function renderAlertBanner(selectedDate) {
+  const banner  = document.getElementById('alertBanner');
+  const content = document.getElementById('alertContent');
+  const dateAlerts = _allAlerts.filter(a => a.date === selectedDate);
+
+  if (!dateAlerts.length) { banner.style.display = 'none'; return; }
+
+  content.innerHTML =
+    `<span style="color:var(--accent);font-size:.78rem;font-weight:700;letter-spacing:.05em;white-space:nowrap">
+       <i class="fa-solid fa-bell me-1"></i>${selectedDate} 異動
+     </span>` +
+    dateAlerts.map(a => {
+      const wCap = (a.winner_cap / 1e8).toFixed(0);
+      const lCap = (a.loser_cap  / 1e8).toFixed(0);
+      const tierColor = a.tier === '兆' ? '#a78bfa' : a.tier === '五千億' ? '#38bdf8' : '#fb923c';
+      return `
+        <span style="background:rgba(0,200,5,.08);border:1px solid rgba(0,200,5,.25);
+          border-radius:8px;padding:3px 11px;font-size:.8rem;white-space:nowrap">
+          <span style="background:${tierColor}22;color:${tierColor};border-radius:4px;padding:1px 6px;font-size:.7rem;margin-right:5px">${a.tier}</span>
+          <span style="color:var(--green);font-weight:700">${a.winner_id} ${a.winner_name}</span>
+          <span style="color:var(--muted);margin:0 5px">超越</span>
+          <span style="color:var(--red)">${a.loser_id} ${a.loser_name}</span>
+          <span style="color:var(--muted);font-size:.72rem;margin-left:6px">${parseInt(wCap).toLocaleString()} vs ${parseInt(lCap).toLocaleString()} 億</span>
+        </span>`;
+    }).join('');
+  banner.style.display = 'block';
+}
+
+function renderAlertHistory(selectedDate) {
+  const card  = document.getElementById('alertHistoryCard');
+  const body  = document.getElementById('alertHistoryBody');
+  const count = document.getElementById('alertHistoryCount');
+  count.textContent = `共 ${_allAlerts.length} 筆`;
+
+  body.innerHTML = _allAlerts.map((a, idx) => {
+    const wCap      = (a.winner_cap / 1e8).toFixed(0);
+    const lCap      = (a.loser_cap  / 1e8).toFixed(0);
+    const diff      = ((a.winner_cap - a.loser_cap) / 1e8).toFixed(0);
+    const isSelected = a.date === selectedDate;
+    const bg        = isSelected ? 'background:#1a2e6e' : idx % 2 === 0 ? 'background:#0f1e5a' : 'background:#0b1746';
+    const tierColor = a.tier === '兆' ? '#a78bfa' : a.tier === '五千億' ? '#38bdf8' : '#fb923c';
+    return `
+      <tr style="${bg};border-bottom:1px solid #162266${isSelected ? ';outline:1px solid #1d2a78' : ''}">
+        <td style="padding:.55rem .75rem;white-space:nowrap;color:var(--muted);font-size:.78rem">
+          ${isSelected ? '<span style="background:rgba(0,200,5,.15);color:var(--green);border-radius:4px;padding:1px 6px;font-size:.7rem;margin-right:4px">●</span>' : ''}
+          ${a.date}
+        </td>
+        <td style="padding:.55rem .5rem;white-space:nowrap">
+          <span style="background:${tierColor}22;color:${tierColor};border-radius:4px;padding:1px 6px;font-size:.7rem">${a.tier}</span>
+        </td>
+        <td style="padding:.55rem .75rem">
+          <span style="color:var(--green);font-weight:600">${a.winner_id}</span>
+          <span style="color:#8899cc;margin-left:4px;font-size:.82rem">${a.winner_name}</span>
+          <span style="color:var(--muted);font-size:.75rem;margin-left:6px">${parseInt(wCap).toLocaleString()} 億</span>
+        </td>
+        <td style="padding:.55rem .5rem;text-align:center;color:var(--accent);font-size:.8rem">超越</td>
+        <td style="padding:.55rem .75rem">
+          <span style="color:var(--red)">${a.loser_id}</span>
+          <span style="color:#8899cc;margin-left:4px;font-size:.82rem">${a.loser_name}</span>
+          <span style="color:var(--muted);font-size:.75rem;margin-left:6px">${parseInt(lCap).toLocaleString()} 億</span>
+        </td>
+        <td style="padding:.55rem .75rem;text-align:right;color:var(--muted);font-size:.78rem;white-space:nowrap">
+          +${parseInt(diff).toLocaleString()} 億
+        </td>
+      </tr>`;
+  }).join('');
+
+  card.style.display = 'block';
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 initTable();
-loadDates();
-loadAlerts();
+loadDates();  // loadAlerts is called inside loadDates after date is known
 </script>
 </body>
 </html>
