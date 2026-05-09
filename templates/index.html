@@ -76,6 +76,15 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
 .modal-footer{border-top:1px solid #222}
 #stockChart canvas{max-height:220px}
 .alert-info-dark{background:rgba(0,200,5,.08);border:1px solid rgba(0,200,5,.2);color:var(--green);border-radius:8px;padding:.6rem 1rem;font-size:.83rem}
+.cmp-metric{background:#162266;border:1px solid #1d2a78;color:var(--muted);border-radius:7px;padding:4px 14px;font-size:.8rem;cursor:pointer;transition:all .15s}
+.cmp-metric:hover{background:#1d2a78;color:var(--text)}
+.cmp-metric.active{background:var(--accent);border-color:var(--accent);color:#000;font-weight:700}
+#cmpDropdown .cmp-item{padding:.55rem 1rem;cursor:pointer;font-size:.84rem;border-bottom:1px solid #1d2a78;display:flex;gap:.75rem;align-items:center}
+#cmpDropdown .cmp-item:last-child{border-bottom:none}
+#cmpDropdown .cmp-item:hover{background:#1d2a78}
+#cmpDropdown .cmp-item .cmp-code{color:var(--accent);font-weight:700;min-width:3rem}
+#cmpDropdown .cmp-item .cmp-name{color:var(--text)}
+#cmpDropdown .cmp-item .cmp-cap{color:var(--muted);font-size:.76rem;margin-left:auto}
 </style>
 </head>
 <body>
@@ -166,27 +175,50 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
     </div>
   </div>
 
-  <!-- Comparison chart -->
+  <!-- Free comparison -->
   <div class="card p-3 mb-4">
-    <div class="section-title"><i class="fa-solid fa-chart-line me-1" style="color:var(--accent)"></i>個股市值比較</div>
-    <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
-      <input id="compareInput" type="text" placeholder="輸入股票代號（如 2330）" autocomplete="off"
-        class="date-select" style="width:200px"
-        onkeydown="if(event.key==='Enter')addCompare()">
-      <button class="btn-refresh" onclick="addCompare()" style="padding:.38rem .9rem">
-        <i class="fa-solid fa-plus me-1"></i>加入
-      </button>
-      <select id="compareDays" class="date-select" onchange="refreshCompare()" style="width:100px">
-        <option value="10">10天</option>
-        <option value="30" selected>30天</option>
-        <option value="60">60天</option>
-      </select>
-      <div id="compareTags" class="d-flex flex-wrap gap-1"></div>
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+      <div class="section-title mb-0"><i class="fa-solid fa-chart-line me-1" style="color:var(--accent)"></i>自由比較</div>
+      <!-- Metric toggle -->
+      <div class="d-flex gap-1">
+        <button class="cmp-metric active" data-m="market_cap" onclick="setMetric(this)">市值</button>
+        <button class="cmp-metric" data-m="close_price" onclick="setMetric(this)">股價</button>
+        <button class="cmp-metric" data-m="pct" onclick="setMetric(this)">漲跌幅%</button>
+      </div>
     </div>
-    <div style="position:relative;height:280px">
+
+    <!-- Search bar -->
+    <div style="position:relative;margin-bottom:.75rem">
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        <div style="position:relative;flex:1;min-width:220px">
+          <input id="compareInput" type="text" placeholder="搜尋代號或公司名稱…" autocomplete="off"
+            class="date-select" style="width:100%;padding-right:2rem"
+            oninput="onCmpInput()" onkeydown="onCmpKey(event)">
+          <i class="fa-solid fa-magnifying-glass" style="position:absolute;right:.7rem;top:50%;transform:translateY(-50%);color:var(--muted);font-size:.8rem;pointer-events:none"></i>
+          <!-- Dropdown -->
+          <div id="cmpDropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;
+            background:#162266;border:1px solid #1d2a78;border-radius:10px;z-index:999;
+            max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div>
+        </div>
+        <select id="compareDays" class="date-select" onchange="refreshCompare()" style="width:90px">
+          <option value="10">10天</option>
+          <option value="30" selected>30天</option>
+          <option value="60">60天</option>
+        </select>
+        <button class="btn-refresh" onclick="clearCompare()" style="background:#1d2a78;color:var(--muted);font-size:.8rem;padding:.38rem .8rem">
+          <i class="fa-solid fa-trash-can me-1"></i>清除
+        </button>
+      </div>
+      <!-- Selected tags -->
+      <div id="compareTags" class="d-flex flex-wrap gap-1 mt-2"></div>
+    </div>
+
+    <!-- Chart -->
+    <div style="position:relative;height:320px">
       <canvas id="compareChart"></canvas>
-      <div id="compareEmpty" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.9rem">
-        輸入股票代號加入比較
+      <div id="compareEmpty" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);gap:.5rem">
+        <i class="fa-solid fa-chart-line" style="font-size:2rem;opacity:.3"></i>
+        <span style="font-size:.88rem">搜尋並加入股票開始比較（最多 8 支）</span>
       </div>
     </div>
   </div>
@@ -512,52 +544,124 @@ document.getElementById('dateSelect').addEventListener('change', function() {
   loadData(this.value);
 });
 
-// ── Comparison chart ──────────────────────────────────────────────────────────
+// ── Free comparison chart ─────────────────────────────────────────────────────
 const COMPARE_COLORS = ['#00c805','#ff5000','#3b82f6','#f59e0b','#a855f7','#ec4899','#14b8a6','#f97316'];
-let compareStocks = [];  // [{id, name}]
-let compareChart = null;
+let compareStocks = [];
+let compareChart  = null;
+let cmpMetric     = 'market_cap';
+let cmpDropSel    = -1;
 
-async function addCompare() {
-  const input = document.getElementById('compareInput');
-  const sid = input.value.trim();
-  if (!sid) return;
-  if (compareStocks.find(s => s.id === sid)) { input.value=''; return; }
+// ─ Autocomplete ───────────────────────────────────────────────────────────────
+function onCmpInput() {
+  const q = document.getElementById('compareInput').value.trim().toLowerCase();
+  const dd = document.getElementById('cmpDropdown');
+  cmpDropSel = -1;
+  if (!q || !currentData.length) { dd.style.display='none'; return; }
+
+  const hits = currentData
+    .filter(r => r.stock_id.startsWith(q) || r.stock_name.toLowerCase().includes(q))
+    .slice(0, 8);
+
+  if (!hits.length) { dd.style.display='none'; return; }
+
+  dd.innerHTML = hits.map((r,i) => {
+    const cap = r.market_cap ? (r.market_cap/1e8).toFixed(0)+' 億' : '';
+    return `<div class="cmp-item" data-id="${r.stock_id}" data-name="${r.stock_name}"
+      onmousedown="pickCmpItem('${r.stock_id}','${r.stock_name.replace(/'/g,'')}')">
+      <span class="cmp-code">${r.stock_id}</span>
+      <span class="cmp-name">${r.stock_name}</span>
+      <span class="cmp-cap">${cap}</span>
+    </div>`;
+  }).join('');
+  dd.style.display = 'block';
+}
+
+function onCmpKey(e) {
+  const dd = document.getElementById('cmpDropdown');
+  const items = dd.querySelectorAll('.cmp-item');
+  if (e.key === 'ArrowDown') { cmpDropSel = Math.min(cmpDropSel+1, items.length-1); highlightDrop(items); e.preventDefault(); }
+  else if (e.key === 'ArrowUp') { cmpDropSel = Math.max(cmpDropSel-1, 0); highlightDrop(items); e.preventDefault(); }
+  else if (e.key === 'Enter') {
+    if (cmpDropSel >= 0 && items[cmpDropSel]) {
+      const el = items[cmpDropSel];
+      pickCmpItem(el.dataset.id, el.dataset.name);
+    } else { addCompareById(document.getElementById('compareInput').value.trim()); }
+    e.preventDefault();
+  } else if (e.key === 'Escape') { dd.style.display='none'; }
+}
+
+function highlightDrop(items) {
+  items.forEach((el,i) => el.style.background = i===cmpDropSel ? '#1d2a78' : '');
+}
+
+function pickCmpItem(id, name) {
+  document.getElementById('compareInput').value = '';
+  document.getElementById('cmpDropdown').style.display = 'none';
+  addCompareById(id, name);
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#compareInput') && !e.target.closest('#cmpDropdown'))
+    document.getElementById('cmpDropdown').style.display = 'none';
+});
+
+// ─ Add / remove ───────────────────────────────────────────────────────────────
+async function addCompareById(id, name) {
+  if (!id) return;
+  if (compareStocks.find(s => s.id === id)) return;
   if (compareStocks.length >= 8) { alert('最多比較 8 支股票'); return; }
 
-  // Fetch to verify stock exists
-  const days = document.getElementById('compareDays').value;
-  const res = await fetch(`/api/stock/${sid}/history?days=${days}`);
-  const hist = await res.json();
-  if (!hist.length) { alert(`找不到股票代號 ${sid}`); return; }
-
-  const name = hist[0].stock_name || sid;
-  compareStocks.push({ id: sid, name });
-  input.value = '';
+  if (!name) {
+    const found = currentData.find(r => r.stock_id === id);
+    name = found ? found.stock_name : id;
+  }
+  compareStocks.push({ id, name });
   renderCompareTags();
   await refreshCompare();
 }
 
-function removeCompare(sid) {
-  compareStocks = compareStocks.filter(s => s.id !== sid);
+// Legacy entry point (button click)
+function addCompare() {
+  const v = document.getElementById('compareInput').value.trim();
+  document.getElementById('cmpDropdown').style.display = 'none';
+  addCompareById(v);
+}
+
+function removeCompare(id) {
+  compareStocks = compareStocks.filter(s => s.id !== id);
+  renderCompareTags();
+  refreshCompare();
+}
+
+function clearCompare() {
+  compareStocks = [];
   renderCompareTags();
   refreshCompare();
 }
 
 function renderCompareTags() {
-  const el = document.getElementById('compareTags');
-  el.innerHTML = compareStocks.map((s, i) =>
-    `<span style="background:${COMPARE_COLORS[i]}22;color:${COMPARE_COLORS[i]};border:1px solid ${COMPARE_COLORS[i]}44;
-      border-radius:20px;padding:2px 10px;font-size:.8rem;cursor:pointer;white-space:nowrap"
-      onclick="removeCompare('${s.id}')">
-      ${s.id} ${s.name} ✕
+  document.getElementById('compareTags').innerHTML = compareStocks.map((s,i) =>
+    `<span onclick="removeCompare('${s.id}')" style="background:${COMPARE_COLORS[i]}18;
+      color:${COMPARE_COLORS[i]};border:1px solid ${COMPARE_COLORS[i]}44;
+      border-radius:20px;padding:2px 12px;font-size:.79rem;cursor:pointer;white-space:nowrap;
+      display:inline-flex;align-items:center;gap:5px">
+      <span style="width:8px;height:8px;border-radius:50%;background:${COMPARE_COLORS[i]};display:inline-block"></span>
+      ${s.id} ${s.name} <span style="opacity:.7">✕</span>
     </span>`
   ).join('');
 }
 
-async function refreshCompare() {
-  const days = document.getElementById('compareDays').value;
-  const empty = document.getElementById('compareEmpty');
+// ─ Metric toggle ──────────────────────────────────────────────────────────────
+function setMetric(btn) {
+  document.querySelectorAll('.cmp-metric').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  cmpMetric = btn.dataset.m;
+  refreshCompare();
+}
 
+// ─ Chart render ───────────────────────────────────────────────────────────────
+async function refreshCompare() {
+  const empty = document.getElementById('compareEmpty');
   if (!compareStocks.length) {
     if (compareChart) { compareChart.destroy(); compareChart = null; }
     empty.style.display = 'flex';
@@ -565,33 +669,52 @@ async function refreshCompare() {
   }
   empty.style.display = 'none';
 
-  // Fetch history for all stocks in parallel
+  const days = document.getElementById('compareDays').value;
   const allData = await Promise.all(
     compareStocks.map(s =>
       fetch(`/api/stock/${s.id}/history?days=${days}`)
-        .then(r => r.json())
-        .then(h => ({ ...s, history: h }))
+        .then(r => r.json()).then(h => ({ ...s, history: h }))
     )
   );
 
-  // Union of all dates
   const dateSet = new Set();
   allData.forEach(s => s.history.forEach(r => dateSet.add(r.date)));
   const labels = [...dateSet].sort();
 
+  // Build first-day baseline for pct mode
   const datasets = allData.map((s, i) => {
-    const byDate = Object.fromEntries(s.history.map(r => [r.date, r.market_cap]));
+    const byDate = Object.fromEntries(s.history.map(r => [r.date, r]));
+    const firstRow = s.history[0];
+
+    let getValue, yLabel, fmt;
+    if (cmpMetric === 'market_cap') {
+      getValue = r => r ? +(r.market_cap/1e8).toFixed(1) : null;
+      yLabel = '億'; fmt = v => v + ' 億';
+    } else if (cmpMetric === 'close_price') {
+      getValue = r => r ? r.close_price : null;
+      yLabel = '元'; fmt = v => v + ' 元';
+    } else {
+      // pct change relative to first day
+      const base = firstRow ? firstRow.close_price : null;
+      getValue = r => (r && base) ? +((r.close_price - base)/base*100).toFixed(2) : null;
+      yLabel = '%'; fmt = v => v + '%';
+    }
+
     return {
       label: `${s.id} ${s.name}`,
-      data: labels.map(d => byDate[d] ? (byDate[d] / 1e8).toFixed(1) : null),
+      data: labels.map(d => getValue(byDate[d])),
       borderColor: COMPARE_COLORS[i],
-      backgroundColor: COMPARE_COLORS[i] + '18',
-      fill: false,
-      tension: .3,
-      pointRadius: 3,
+      backgroundColor: COMPARE_COLORS[i] + '12',
+      fill: cmpMetric === 'pct',
+      tension: .35,
+      pointRadius: 2,
+      pointHoverRadius: 5,
       spanGaps: true,
+      _fmt: fmt,
     };
   });
+
+  const fmt = datasets[0]?._fmt || (v => v);
 
   if (compareChart) compareChart.destroy();
   const ctx = document.getElementById('compareChart').getContext('2d');
@@ -603,12 +726,18 @@ async function refreshCompare() {
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { labels: { color: '#f5f5f5', boxWidth: 12, font: { size: 12 } } },
-        tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${c.parsed.y} 億` } }
+        legend: {
+          labels: { color: '#f5f5f5', boxWidth: 10, padding: 16, font: { size: 12 } }
+        },
+        tooltip: {
+          callbacks: {
+            label: c => ` ${c.dataset.label}: ${datasets[c.datasetIndex]._fmt(c.parsed.y)}`
+          }
+        }
       },
       scales: {
-        x: { grid: { color: '#162266' }, ticks: { maxTicksLimit: 10 } },
-        y: { grid: { color: '#162266' }, ticks: { callback: v => v + ' 億' } }
+        x: { grid: { color:'#162266' }, ticks: { color:'#8899cc', maxTicksLimit:10 } },
+        y: { grid: { color:'#162266' }, ticks: { color:'#8899cc', callback: v => fmt(v) } }
       }
     }
   });
