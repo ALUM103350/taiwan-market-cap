@@ -51,6 +51,49 @@ def api_stock_history(stock_id):
     return jsonify(db.get_stock_history(stock_id, days))
 
 
+@app.route("/api/alerts")
+def api_alerts():
+    """偵測兆級公司（市值 >= 1兆）今日 vs 昨日排名交叉事件。"""
+    dates = db.get_dates()
+    if len(dates) < 2:
+        return jsonify([])
+
+    today, yesterday = dates[0], dates[1]
+    TRILLION = 1_000_000_000_000
+
+    today_data  = {r["stock_id"]: r for r in db.get_data_for_date(today)     if r["market_cap"] >= TRILLION}
+    yest_data   = {r["stock_id"]: r for r in db.get_data_for_date(yesterday)  if r["market_cap"] >= TRILLION}
+
+    common = list(set(today_data) & set(yest_data))
+    alerts = []
+
+    for i in range(len(common)):
+        for j in range(i + 1, len(common)):
+            a, b = common[i], common[j]
+            ra_t = today_data[a]["market_cap_rank"]
+            rb_t = today_data[b]["market_cap_rank"]
+            ra_y = yest_data[a]["market_cap_rank"]
+            rb_y = yest_data[b]["market_cap_rank"]
+
+            # Ranks crossed if A vs B ordering flipped
+            if (ra_t < rb_t) != (ra_y < rb_y):
+                winner, loser = (a, b) if ra_t < rb_t else (b, a)
+                alerts.append({
+                    "winner_id":   winner,
+                    "winner_name": today_data[winner]["stock_name"],
+                    "winner_cap":  today_data[winner]["market_cap"],
+                    "winner_rank": today_data[winner]["market_cap_rank"],
+                    "loser_id":    loser,
+                    "loser_name":  today_data[loser]["stock_name"],
+                    "loser_cap":   today_data[loser]["market_cap"],
+                    "loser_rank":  today_data[loser]["market_cap_rank"],
+                    "date": today,
+                })
+
+    alerts.sort(key=lambda x: x["winner_rank"])
+    return jsonify(alerts)
+
+
 @app.route("/api/refresh", methods=["POST"])
 def api_refresh():
     # On Vercel (serverless), background threads are not supported.

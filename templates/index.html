@@ -104,6 +104,11 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
   </div>
 </div>
 
+<!-- Alert banner -->
+<div id="alertBanner" style="display:none;background:linear-gradient(90deg,#0b1746,#162266);border-bottom:2px solid var(--accent);padding:.6rem 1.5rem">
+  <div id="alertContent" class="d-flex flex-wrap gap-3 align-items-center"></div>
+</div>
+
 <!-- Main -->
 <div class="container-fluid px-4 py-4">
 
@@ -599,9 +604,42 @@ async function refreshCompare() {
   });
 }
 
+// ── Trillion alerts ───────────────────────────────────────────────────────────
+async function loadAlerts() {
+  try {
+    const res = await fetch('/api/alerts');
+    const alerts = await res.json();
+    const banner = document.getElementById('alertBanner');
+    const content = document.getElementById('alertContent');
+    if (!alerts.length) { banner.style.display = 'none'; return; }
+
+    content.innerHTML =
+      `<span style="color:var(--accent);font-size:.8rem;font-weight:700;letter-spacing:.05em;white-space:nowrap">
+         <i class="fa-solid fa-bell me-1"></i>兆級排名異動
+       </span>` +
+      alerts.map(a => {
+        const wCap = (a.winner_cap / 1e12).toFixed(2);
+        const lCap = (a.loser_cap  / 1e12).toFixed(2);
+        return `
+          <span style="background:rgba(0,200,5,.08);border:1px solid rgba(0,200,5,.25);
+            border-radius:8px;padding:4px 12px;font-size:.82rem;white-space:nowrap">
+            <span style="color:var(--green);font-weight:700">${a.winner_id} ${a.winner_name}</span>
+            <span style="color:var(--muted);margin:0 4px">超越</span>
+            <span style="color:var(--red)">${a.loser_id} ${a.loser_name}</span>
+            <span style="color:var(--muted);font-size:.75rem;margin-left:6px">
+              ${wCap}兆 vs ${lCap}兆
+            </span>
+          </span>`;
+      }).join('');
+
+    banner.style.display = 'block';
+  } catch(e) { console.error('alerts error', e); }
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 initTable();
 loadDates();
+loadAlerts();
 </script>
 </body>
 </html>
