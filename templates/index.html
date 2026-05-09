@@ -121,6 +121,47 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
 <!-- Main -->
 <div class="container-fluid px-4 py-4">
 
+  <!-- Free comparison -->
+  <div class="card p-3 mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+      <div class="section-title mb-0"><i class="fa-solid fa-chart-line me-1" style="color:var(--accent)"></i>自由比較</div>
+      <div class="d-flex gap-1">
+        <button class="cmp-metric active" data-m="market_cap" onclick="setMetric(this)">市值</button>
+        <button class="cmp-metric" data-m="close_price" onclick="setMetric(this)">股價</button>
+        <button class="cmp-metric" data-m="pct" onclick="setMetric(this)">漲跌幅%</button>
+      </div>
+    </div>
+    <div style="position:relative;margin-bottom:.75rem">
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        <div style="position:relative;flex:1;min-width:220px">
+          <input id="compareInput" type="text" placeholder="搜尋代號或公司名稱…" autocomplete="off"
+            class="date-select" style="width:100%;padding-right:2rem"
+            oninput="onCmpInput()" onkeydown="onCmpKey(event)">
+          <i class="fa-solid fa-magnifying-glass" style="position:absolute;right:.7rem;top:50%;transform:translateY(-50%);color:var(--muted);font-size:.8rem;pointer-events:none"></i>
+          <div id="cmpDropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;
+            background:#162266;border:1px solid #1d2a78;border-radius:10px;z-index:999;
+            max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div>
+        </div>
+        <select id="compareDays" class="date-select" onchange="refreshCompare()" style="width:90px">
+          <option value="10">10天</option>
+          <option value="30" selected>30天</option>
+          <option value="60">60天</option>
+        </select>
+        <button class="btn-refresh" onclick="clearCompare()" style="background:#1d2a78;color:var(--muted);font-size:.8rem;padding:.38rem .8rem">
+          <i class="fa-solid fa-trash-can me-1"></i>清除
+        </button>
+      </div>
+      <div id="compareTags" class="d-flex flex-wrap gap-1 mt-2"></div>
+    </div>
+    <div style="position:relative;height:320px">
+      <canvas id="compareChart"></canvas>
+      <div id="compareEmpty" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);gap:.5rem">
+        <i class="fa-solid fa-chart-line" style="font-size:2rem;opacity:.3"></i>
+        <span style="font-size:.88rem">搜尋並加入股票開始比較（最多 8 支）</span>
+      </div>
+    </div>
+  </div>
+
   <!-- Summary cards -->
   <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
@@ -172,54 +213,6 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
         </thead>
         <tbody id="alertHistoryBody"></tbody>
       </table>
-    </div>
-  </div>
-
-  <!-- Free comparison -->
-  <div class="card p-3 mb-4">
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-      <div class="section-title mb-0"><i class="fa-solid fa-chart-line me-1" style="color:var(--accent)"></i>自由比較</div>
-      <!-- Metric toggle -->
-      <div class="d-flex gap-1">
-        <button class="cmp-metric active" data-m="market_cap" onclick="setMetric(this)">市值</button>
-        <button class="cmp-metric" data-m="close_price" onclick="setMetric(this)">股價</button>
-        <button class="cmp-metric" data-m="pct" onclick="setMetric(this)">漲跌幅%</button>
-      </div>
-    </div>
-
-    <!-- Search bar -->
-    <div style="position:relative;margin-bottom:.75rem">
-      <div class="d-flex gap-2 align-items-center flex-wrap">
-        <div style="position:relative;flex:1;min-width:220px">
-          <input id="compareInput" type="text" placeholder="搜尋代號或公司名稱…" autocomplete="off"
-            class="date-select" style="width:100%;padding-right:2rem"
-            oninput="onCmpInput()" onkeydown="onCmpKey(event)">
-          <i class="fa-solid fa-magnifying-glass" style="position:absolute;right:.7rem;top:50%;transform:translateY(-50%);color:var(--muted);font-size:.8rem;pointer-events:none"></i>
-          <!-- Dropdown -->
-          <div id="cmpDropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;
-            background:#162266;border:1px solid #1d2a78;border-radius:10px;z-index:999;
-            max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div>
-        </div>
-        <select id="compareDays" class="date-select" onchange="refreshCompare()" style="width:90px">
-          <option value="10">10天</option>
-          <option value="30" selected>30天</option>
-          <option value="60">60天</option>
-        </select>
-        <button class="btn-refresh" onclick="clearCompare()" style="background:#1d2a78;color:var(--muted);font-size:.8rem;padding:.38rem .8rem">
-          <i class="fa-solid fa-trash-can me-1"></i>清除
-        </button>
-      </div>
-      <!-- Selected tags -->
-      <div id="compareTags" class="d-flex flex-wrap gap-1 mt-2"></div>
-    </div>
-
-    <!-- Chart -->
-    <div style="position:relative;height:320px">
-      <canvas id="compareChart"></canvas>
-      <div id="compareEmpty" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);gap:.5rem">
-        <i class="fa-solid fa-chart-line" style="font-size:2rem;opacity:.3"></i>
-        <span style="font-size:.88rem">搜尋並加入股票開始比較（最多 8 支）</span>
-      </div>
     </div>
   </div>
 
