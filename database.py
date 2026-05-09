@@ -158,7 +158,7 @@ class Database:
             cur = conn.execute("""
                 SELECT date, stock_id, stock_name, market_cap, market_cap_rank
                 FROM market_cap
-                WHERE market_cap >= 1000000000000
+                WHERE market_cap >= 500000000000
                 ORDER BY date ASC, market_cap_rank ASC
             """)
             return [dict(r) for r in cur.fetchall()]

@@ -51,15 +51,21 @@ def api_stock_history(stock_id):
     return jsonify(db.get_stock_history(stock_id, days))
 
 
+TIER_TRILLION  = 1_000_000_000_000   # 1兆
+TIER_500B      =   500_000_000_000   # 5000億
+
+def _tier_label(cap):
+    if cap >= TIER_TRILLION:
+        return "兆"
+    return "五千億"
+
 @app.route("/api/alerts")
 def api_alerts():
-    """偵測所有歷史兆級公司排名交叉事件（市值 >= 1兆）。"""
-    rows = db.get_trillion_history()  # single query, all dates
+    """偵測兆級（>=1兆）及五千億級（5000億~1兆）公司歷史排名交叉事件。"""
+    rows = db.get_trillion_history()
     if not rows:
         return jsonify([])
 
-    # Group by date
-    from itertools import groupby
     by_date = {}
     for r in rows:
         by_date.setdefault(r["date"], {})[r["stock_id"]] = r
@@ -77,6 +83,13 @@ def api_alerts():
         for j in range(len(common)):
             for k in range(j + 1, len(common)):
                 a, b = common[j], common[k]
+                cap_a = today_map[a]["market_cap"]
+                cap_b = today_map[b]["market_cap"]
+
+                # Only compare within the same tier
+                if _tier_label(cap_a) != _tier_label(cap_b):
+                    continue
+
                 ra_t = today_map[a]["market_cap_rank"]
                 rb_t = today_map[b]["market_cap_rank"]
                 ra_y = yest_map[a]["market_cap_rank"]
@@ -86,6 +99,7 @@ def api_alerts():
                     winner, loser = (a, b) if ra_t < rb_t else (b, a)
                     all_alerts.append({
                         "date":        today_str,
+                        "tier":        _tier_label(today_map[winner]["market_cap"]),
                         "winner_id":   winner,
                         "winner_name": today_map[winner]["stock_name"],
                         "winner_cap":  today_map[winner]["market_cap"],
@@ -96,7 +110,7 @@ def api_alerts():
                         "loser_rank":  today_map[loser]["market_cap_rank"],
                     })
 
-    all_alerts.sort(key=lambda x: x["date"], reverse=True)
+    all_alerts.sort(key=lambda x: (x["date"], x["winner_rank"]), reverse=True)
     return jsonify(all_alerts)
 
 

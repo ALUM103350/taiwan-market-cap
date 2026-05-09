@@ -166,13 +166,13 @@ class Database:
                 return [dict(r) for r in reversed(rows)]
 
     def get_trillion_history(self):
-        """Return all records where market_cap >= 1兆, ordered by date asc."""
+        """Return all records where market_cap >= 5000億, ordered by date asc."""
         with self.get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT date, stock_id, stock_name, market_cap, market_cap_rank
                     FROM market_cap
-                    WHERE market_cap >= 1000000000000
+                    WHERE market_cap >= 500000000000
                     ORDER BY date ASC, market_cap_rank ASC
                 """)
                 return [dict(r) for r in cur.fetchall()]
