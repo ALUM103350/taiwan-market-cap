@@ -153,6 +153,16 @@ class Database:
             rows = cur.fetchall()
             return [dict(r) for r in reversed(rows)]
 
+    def get_trillion_history(self):
+        with self.get_conn() as conn:
+            cur = conn.execute("""
+                SELECT date, stock_id, stock_name, market_cap, market_cap_rank
+                FROM market_cap
+                WHERE market_cap >= 1000000000000
+                ORDER BY date ASC, market_cap_rank ASC
+            """)
+            return [dict(r) for r in cur.fetchall()]
+
     def get_summary(self, date_str):
         with self.get_conn() as conn:
             cur = conn.execute("""

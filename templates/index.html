@@ -104,9 +104,9 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
   </div>
 </div>
 
-<!-- Alert banner -->
-<div id="alertBanner" style="display:none;background:linear-gradient(90deg,#0b1746,#162266);border-bottom:2px solid var(--accent);padding:.6rem 1.5rem">
-  <div id="alertContent" class="d-flex flex-wrap gap-3 align-items-center"></div>
+<!-- Alert banner (today only) -->
+<div id="alertBanner" style="display:none;background:linear-gradient(90deg,#0b1746,#162266);border-bottom:2px solid var(--accent);padding:.55rem 1.5rem">
+  <div id="alertContent" class="d-flex flex-wrap gap-2 align-items-center"></div>
 </div>
 
 <!-- Main -->
@@ -153,6 +153,30 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
         <div class="section-title"><i class="fa-solid fa-arrow-trend-down me-1" style="color:var(--red)"></i>市值減少前10名</div>
         <canvas id="losersChart"></canvas>
       </div>
+    </div>
+  </div>
+
+  <!-- Trillion crossover history -->
+  <div id="alertHistoryCard" class="card p-3 mb-4" style="display:none">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <div class="section-title mb-0">
+        <i class="fa-solid fa-bell me-1" style="color:var(--accent)"></i>兆級排名交叉紀錄
+      </div>
+      <span id="alertHistoryCount" style="font-size:.78rem;color:var(--muted)"></span>
+    </div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:.84rem">
+        <thead>
+          <tr style="color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em">
+            <th style="padding:.5rem .75rem;white-space:nowrap">日期</th>
+            <th style="padding:.5rem .75rem">超越方</th>
+            <th style="padding:.5rem .75rem;text-align:center;color:var(--muted)"></th>
+            <th style="padding:.5rem .75rem">被超越方</th>
+            <th style="padding:.5rem .75rem;text-align:right;white-space:nowrap">市值差距</th>
+          </tr>
+        </thead>
+        <tbody id="alertHistoryBody"></tbody>
+      </table>
     </div>
   </div>
 
@@ -609,30 +633,71 @@ async function loadAlerts() {
   try {
     const res = await fetch('/api/alerts');
     const alerts = await res.json();
-    const banner = document.getElementById('alertBanner');
+    if (!alerts.length) return;
+
+    const latestDate = alerts[0].date;
+    const todayAlerts = alerts.filter(a => a.date === latestDate);
+
+    // ── Top banner: today's crossovers ──
+    const banner  = document.getElementById('alertBanner');
     const content = document.getElementById('alertContent');
-    if (!alerts.length) { banner.style.display = 'none'; return; }
+    if (todayAlerts.length) {
+      content.innerHTML =
+        `<span style="color:var(--accent);font-size:.78rem;font-weight:700;letter-spacing:.05em;white-space:nowrap">
+           <i class="fa-solid fa-bell me-1"></i>今日兆級異動
+         </span>` +
+        todayAlerts.map(a => {
+          const wCap = (a.winner_cap / 1e12).toFixed(2);
+          const lCap = (a.loser_cap  / 1e12).toFixed(2);
+          return `
+            <span style="background:rgba(0,200,5,.08);border:1px solid rgba(0,200,5,.25);
+              border-radius:8px;padding:3px 11px;font-size:.8rem;white-space:nowrap">
+              <span style="color:var(--muted);font-size:.72rem;margin-right:5px">${a.date}</span>
+              <span style="color:var(--green);font-weight:700">${a.winner_id} ${a.winner_name}</span>
+              <span style="color:var(--muted);margin:0 5px">超越</span>
+              <span style="color:var(--red)">${a.loser_id} ${a.loser_name}</span>
+              <span style="color:var(--muted);font-size:.72rem;margin-left:6px">${wCap}兆 vs ${lCap}兆</span>
+            </span>`;
+        }).join('');
+      banner.style.display = 'block';
+    }
 
-    content.innerHTML =
-      `<span style="color:var(--accent);font-size:.8rem;font-weight:700;letter-spacing:.05em;white-space:nowrap">
-         <i class="fa-solid fa-bell me-1"></i>兆級排名異動
-       </span>` +
-      alerts.map(a => {
-        const wCap = (a.winner_cap / 1e12).toFixed(2);
-        const lCap = (a.loser_cap  / 1e12).toFixed(2);
-        return `
-          <span style="background:rgba(0,200,5,.08);border:1px solid rgba(0,200,5,.25);
-            border-radius:8px;padding:4px 12px;font-size:.82rem;white-space:nowrap">
-            <span style="color:var(--green);font-weight:700">${a.winner_id} ${a.winner_name}</span>
-            <span style="color:var(--muted);margin:0 4px">超越</span>
-            <span style="color:var(--red)">${a.loser_id} ${a.loser_name}</span>
-            <span style="color:var(--muted);font-size:.75rem;margin-left:6px">
-              ${wCap}兆 vs ${lCap}兆
-            </span>
-          </span>`;
-      }).join('');
+    // ── History table: all crossovers ──
+    const card = document.getElementById('alertHistoryCard');
+    const body = document.getElementById('alertHistoryBody');
+    const count = document.getElementById('alertHistoryCount');
+    count.textContent = `共 ${alerts.length} 筆`;
 
-    banner.style.display = 'block';
+    body.innerHTML = alerts.map((a, idx) => {
+      const wCap   = (a.winner_cap / 1e12).toFixed(2);
+      const lCap   = (a.loser_cap  / 1e12).toFixed(2);
+      const diff   = ((a.winner_cap - a.loser_cap) / 1e8).toFixed(0);
+      const isNew  = a.date === latestDate;
+      const bg     = idx % 2 === 0 ? 'background:#0f1e5a' : 'background:#0b1746';
+      return `
+        <tr style="${bg};border-bottom:1px solid #162266">
+          <td style="padding:.55rem .75rem;white-space:nowrap;color:var(--muted);font-size:.78rem">
+            ${isNew ? '<span style="background:rgba(0,200,5,.15);color:var(--green);border-radius:4px;padding:1px 6px;font-size:.7rem;margin-right:4px">NEW</span>' : ''}
+            ${a.date}
+          </td>
+          <td style="padding:.55rem .75rem">
+            <span style="color:var(--green);font-weight:600">${a.winner_id}</span>
+            <span style="color:#8899cc;margin-left:4px;font-size:.82rem">${a.winner_name}</span>
+            <span style="color:var(--muted);font-size:.75rem;margin-left:6px">${wCap}兆</span>
+          </td>
+          <td style="padding:.55rem .5rem;text-align:center;color:var(--accent);font-size:.8rem">超越</td>
+          <td style="padding:.55rem .75rem">
+            <span style="color:var(--red)">${a.loser_id}</span>
+            <span style="color:#8899cc;margin-left:4px;font-size:.82rem">${a.loser_name}</span>
+            <span style="color:var(--muted);font-size:.75rem;margin-left:6px">${lCap}兆</span>
+          </td>
+          <td style="padding:.55rem .75rem;text-align:right;color:var(--muted);font-size:.78rem;white-space:nowrap">
+            +${parseInt(diff).toLocaleString()} 億
+          </td>
+        </tr>`;
+    }).join('');
+
+    card.style.display = 'block';
   } catch(e) { console.error('alerts error', e); }
 }
 

@@ -53,45 +53,51 @@ def api_stock_history(stock_id):
 
 @app.route("/api/alerts")
 def api_alerts():
-    """偵測兆級公司（市值 >= 1兆）今日 vs 昨日排名交叉事件。"""
-    dates = db.get_dates()
-    if len(dates) < 2:
+    """偵測所有歷史兆級公司排名交叉事件（市值 >= 1兆）。"""
+    rows = db.get_trillion_history()  # single query, all dates
+    if not rows:
         return jsonify([])
 
-    today, yesterday = dates[0], dates[1]
-    TRILLION = 1_000_000_000_000
+    # Group by date
+    from itertools import groupby
+    by_date = {}
+    for r in rows:
+        by_date.setdefault(r["date"], {})[r["stock_id"]] = r
 
-    today_data  = {r["stock_id"]: r for r in db.get_data_for_date(today)     if r["market_cap"] >= TRILLION}
-    yest_data   = {r["stock_id"]: r for r in db.get_data_for_date(yesterday)  if r["market_cap"] >= TRILLION}
+    sorted_dates = sorted(by_date.keys())
+    all_alerts = []
 
-    common = list(set(today_data) & set(yest_data))
-    alerts = []
+    for i in range(1, len(sorted_dates)):
+        today_str = sorted_dates[i]
+        yest_str  = sorted_dates[i - 1]
+        today_map = by_date[today_str]
+        yest_map  = by_date[yest_str]
 
-    for i in range(len(common)):
-        for j in range(i + 1, len(common)):
-            a, b = common[i], common[j]
-            ra_t = today_data[a]["market_cap_rank"]
-            rb_t = today_data[b]["market_cap_rank"]
-            ra_y = yest_data[a]["market_cap_rank"]
-            rb_y = yest_data[b]["market_cap_rank"]
+        common = list(set(today_map) & set(yest_map))
+        for j in range(len(common)):
+            for k in range(j + 1, len(common)):
+                a, b = common[j], common[k]
+                ra_t = today_map[a]["market_cap_rank"]
+                rb_t = today_map[b]["market_cap_rank"]
+                ra_y = yest_map[a]["market_cap_rank"]
+                rb_y = yest_map[b]["market_cap_rank"]
 
-            # Ranks crossed if A vs B ordering flipped
-            if (ra_t < rb_t) != (ra_y < rb_y):
-                winner, loser = (a, b) if ra_t < rb_t else (b, a)
-                alerts.append({
-                    "winner_id":   winner,
-                    "winner_name": today_data[winner]["stock_name"],
-                    "winner_cap":  today_data[winner]["market_cap"],
-                    "winner_rank": today_data[winner]["market_cap_rank"],
-                    "loser_id":    loser,
-                    "loser_name":  today_data[loser]["stock_name"],
-                    "loser_cap":   today_data[loser]["market_cap"],
-                    "loser_rank":  today_data[loser]["market_cap_rank"],
-                    "date": today,
-                })
+                if (ra_t < rb_t) != (ra_y < rb_y):
+                    winner, loser = (a, b) if ra_t < rb_t else (b, a)
+                    all_alerts.append({
+                        "date":        today_str,
+                        "winner_id":   winner,
+                        "winner_name": today_map[winner]["stock_name"],
+                        "winner_cap":  today_map[winner]["market_cap"],
+                        "winner_rank": today_map[winner]["market_cap_rank"],
+                        "loser_id":    loser,
+                        "loser_name":  today_map[loser]["stock_name"],
+                        "loser_cap":   today_map[loser]["market_cap"],
+                        "loser_rank":  today_map[loser]["market_cap_rank"],
+                    })
 
-    alerts.sort(key=lambda x: x["winner_rank"])
-    return jsonify(alerts)
+    all_alerts.sort(key=lambda x: x["date"], reverse=True)
+    return jsonify(all_alerts)
 
 
 @app.route("/api/refresh", methods=["POST"])
