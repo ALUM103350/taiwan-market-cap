@@ -118,15 +118,22 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
 
 <!-- Alert banner -->
 <div id="alertBanner" style="display:none;background:linear-gradient(90deg,#0b1746,#162266);border-bottom:2px solid var(--accent);padding:.6rem 1.5rem">
-  <!-- Period tabs -->
-  <div style="display:flex;gap:.4rem;margin-bottom:.5rem;align-items:center">
-    <span style="color:var(--accent);font-size:.75rem;font-weight:700;margin-right:.3rem">
+  <!-- Period tabs + navigation -->
+  <div style="display:flex;gap:.4rem;margin-bottom:.5rem;align-items:center;flex-wrap:wrap">
+    <span style="color:var(--accent);font-size:.75rem;font-weight:700;margin-right:.3rem;white-space:nowrap">
       <i class="fa-solid fa-bell me-1"></i>異動統計
     </span>
     <button class="alert-tab active" data-p="day"   onclick="setAlertPeriod(this)">當日</button>
-    <button class="alert-tab"        data-p="week"  onclick="setAlertPeriod(this)">本週</button>
-    <button class="alert-tab"        data-p="month" onclick="setAlertPeriod(this)">本月</button>
-    <span id="alertPeriodLabel" style="color:var(--muted);font-size:.72rem;margin-left:.4rem"></span>
+    <button class="alert-tab"        data-p="week"  onclick="setAlertPeriod(this)">每週</button>
+    <button class="alert-tab"        data-p="month" onclick="setAlertPeriod(this)">每月</button>
+    <!-- Week / month navigator (hidden when period=day) -->
+    <div id="alertNav" style="display:none;align-items:center;gap:.3rem;margin-left:.5rem">
+      <button onclick="navPeriod(-1)" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);
+        color:var(--text);border-radius:6px;padding:1px 9px;cursor:pointer;font-size:.82rem">‹</button>
+      <span id="alertPeriodLabel" style="color:var(--text);font-size:.75rem;white-space:nowrap;min-width:130px;text-align:center"></span>
+      <button onclick="navPeriod(1)" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);
+        color:var(--text);border-radius:6px;padding:1px 9px;cursor:pointer;font-size:.82rem">›</button>
+    </div>
   </div>
   <div id="alertContent"></div>
 </div>
@@ -769,8 +776,9 @@ async function loadAlerts(selectedDate) {
 }
 
 // ── Period helpers ────────────────────────────────────────────────────────────
-let _alertPeriod = 'day';
-let _alertDate   = '';
+let _alertPeriod  = 'day';
+let _alertDate    = '';
+let _periodNavDate = '';   // independent nav reference for week/month
 
 function getMonday(dateStr) {
   const d = new Date(dateStr);
@@ -779,21 +787,31 @@ function getMonday(dateStr) {
   return d.toISOString().split('T')[0];
 }
 
-function filterByPeriod(alerts, dateStr, period) {
-  if (period === 'day')   return alerts.filter(a => a.date === dateStr);
-  if (period === 'week')  return alerts.filter(a => getMonday(a.date) === getMonday(dateStr));
-  if (period === 'month') return alerts.filter(a => a.date.substring(0,7) === dateStr.substring(0,7));
+function shiftDate(dateStr, period, delta) {
+  const d = new Date(dateStr);
+  if (period === 'week')  d.setDate(d.getDate() + delta * 7);
+  if (period === 'month') d.setMonth(d.getMonth() + delta);
+  return d.toISOString().split('T')[0];
+}
+
+function filterByPeriod(alerts, refDate, period) {
+  if (period === 'day')   return alerts.filter(a => a.date === refDate);
+  if (period === 'week')  return alerts.filter(a => getMonday(a.date) === getMonday(refDate));
+  if (period === 'month') return alerts.filter(a => a.date.substring(0,7) === refDate.substring(0,7));
   return [];
 }
 
-function periodLabel(dateStr, period) {
-  if (period === 'day')   return dateStr;
+function periodLabel(refDate, period) {
+  if (period === 'day')   return refDate;
   if (period === 'week') {
-    const mon = getMonday(dateStr);
-    const sun = new Date(mon); sun.setDate(sun.getDate()+6);
+    const mon = getMonday(refDate);
+    const sun = new Date(mon); sun.setDate(sun.getDate() + 6);
     return `${mon} ～ ${sun.toISOString().split('T')[0]}`;
   }
-  if (period === 'month') return dateStr.substring(0,7);
+  if (period === 'month') {
+    const [y, m] = refDate.split('-');
+    return `${y} 年 ${m} 月`;
+  }
   return '';
 }
 
@@ -801,20 +819,46 @@ function setAlertPeriod(btn) {
   document.querySelectorAll('.alert-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   _alertPeriod = btn.dataset.p;
+  // Reset nav to current selected date
+  _periodNavDate = _alertDate;
+  const nav = document.getElementById('alertNav');
+  nav.style.display = _alertPeriod === 'day' ? 'none' : 'flex';
   renderAlertBanner(_alertDate);
+}
+
+function navPeriod(delta) {
+  _periodNavDate = shiftDate(_periodNavDate, _alertPeriod, delta);
+  renderAlertBannerWithNav();
+}
+
+function renderAlertBannerWithNav() {
+  // Render using _periodNavDate as reference for week/month
+  const refDate = _alertPeriod === 'day' ? _alertDate : _periodNavDate;
+  _renderBannerContent(refDate);
 }
 
 // ── Banner renderer ───────────────────────────────────────────────────────────
 function renderAlertBanner(selectedDate) {
-  _alertDate = selectedDate;
+  _alertDate     = selectedDate;
+  _periodNavDate = selectedDate;
+  const nav = document.getElementById('alertNav');
+  nav.style.display = _alertPeriod === 'day' ? 'none' : 'flex';
+  _renderBannerContent(selectedDate);
+}
+
+function _renderBannerContent(refDate) {
   const banner  = document.getElementById('alertBanner');
   const content = document.getElementById('alertContent');
   const label   = document.getElementById('alertPeriodLabel');
 
-  const periodAlerts = filterByPeriod(_allAlerts, selectedDate, _alertPeriod);
-  if (!periodAlerts.length) { banner.style.display = 'none'; return; }
+  const periodAlerts = filterByPeriod(_allAlerts, refDate, _alertPeriod);
+  label.textContent  = periodLabel(refDate, _alertPeriod);
 
-  label.textContent = periodLabel(selectedDate, _alertPeriod);
+  if (!periodAlerts.length) {
+    content.innerHTML = `<span style="color:var(--muted);font-size:.8rem">此期間無超越事件</span>`;
+    banner.style.display = 'block';
+    return;
+  }
 
   // ── Winner count ranking ──
   const winCount = {};
@@ -835,7 +879,7 @@ function renderAlertBanner(selectedDate) {
 
   // ── Detail rows (day only to avoid overwhelming) ──
   let detailHtml = '';
-  if (_alertPeriod === 'day') {
+  if (_alertPeriod === 'day' || (periodAlerts.length <= 15 && _alertPeriod !== 'month')) {
     detailHtml = `<div style="display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.4rem">` +
       periodAlerts.map(a => {
         const wCap = (a.winner_cap/1e8).toFixed(0);
