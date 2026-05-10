@@ -76,6 +76,9 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
 .modal-footer{border-top:1px solid #222}
 #stockChart canvas{max-height:220px}
 .alert-info-dark{background:rgba(0,200,5,.08);border:1px solid rgba(0,200,5,.2);color:var(--green);border-radius:8px;padding:.6rem 1rem;font-size:.83rem}
+.alert-tab{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--muted);border-radius:6px;padding:2px 10px;font-size:.74rem;cursor:pointer;transition:all .15s}
+.alert-tab:hover{background:rgba(255,255,255,.1);color:var(--text)}
+.alert-tab.active{background:var(--accent);border-color:var(--accent);color:#000;font-weight:700}
 .cmp-metric{background:#162266;border:1px solid #1d2a78;color:var(--muted);border-radius:7px;padding:4px 14px;font-size:.8rem;cursor:pointer;transition:all .15s}
 .cmp-metric:hover{background:#1d2a78;color:var(--text)}
 .cmp-metric.active{background:var(--accent);border-color:var(--accent);color:#000;font-weight:700}
@@ -113,9 +116,19 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
   </div>
 </div>
 
-<!-- Alert banner (today only) -->
-<div id="alertBanner" style="display:none;background:linear-gradient(90deg,#0b1746,#162266);border-bottom:2px solid var(--accent);padding:.55rem 1.5rem">
-  <div id="alertContent" class="d-flex flex-wrap gap-2 align-items-center"></div>
+<!-- Alert banner -->
+<div id="alertBanner" style="display:none;background:linear-gradient(90deg,#0b1746,#162266);border-bottom:2px solid var(--accent);padding:.6rem 1.5rem">
+  <!-- Period tabs -->
+  <div style="display:flex;gap:.4rem;margin-bottom:.5rem;align-items:center">
+    <span style="color:var(--accent);font-size:.75rem;font-weight:700;margin-right:.3rem">
+      <i class="fa-solid fa-bell me-1"></i>異動統計
+    </span>
+    <button class="alert-tab active" data-p="day"   onclick="setAlertPeriod(this)">當日</button>
+    <button class="alert-tab"        data-p="week"  onclick="setAlertPeriod(this)">本週</button>
+    <button class="alert-tab"        data-p="month" onclick="setAlertPeriod(this)">本月</button>
+    <span id="alertPeriodLabel" style="color:var(--muted);font-size:.72rem;margin-left:.4rem"></span>
+  </div>
+  <div id="alertContent"></div>
 </div>
 
 <!-- Main -->
@@ -755,57 +768,98 @@ async function loadAlerts(selectedDate) {
   } catch(e) { console.error('alerts error', e); }
 }
 
+// ── Period helpers ────────────────────────────────────────────────────────────
+let _alertPeriod = 'day';
+let _alertDate   = '';
+
+function getMonday(dateStr) {
+  const d = new Date(dateStr);
+  const day = d.getDay() || 7;
+  d.setDate(d.getDate() - day + 1);
+  return d.toISOString().split('T')[0];
+}
+
+function filterByPeriod(alerts, dateStr, period) {
+  if (period === 'day')   return alerts.filter(a => a.date === dateStr);
+  if (period === 'week')  return alerts.filter(a => getMonday(a.date) === getMonday(dateStr));
+  if (period === 'month') return alerts.filter(a => a.date.substring(0,7) === dateStr.substring(0,7));
+  return [];
+}
+
+function periodLabel(dateStr, period) {
+  if (period === 'day')   return dateStr;
+  if (period === 'week') {
+    const mon = getMonday(dateStr);
+    const sun = new Date(mon); sun.setDate(sun.getDate()+6);
+    return `${mon} ～ ${sun.toISOString().split('T')[0]}`;
+  }
+  if (period === 'month') return dateStr.substring(0,7);
+  return '';
+}
+
+function setAlertPeriod(btn) {
+  document.querySelectorAll('.alert-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _alertPeriod = btn.dataset.p;
+  renderAlertBanner(_alertDate);
+}
+
+// ── Banner renderer ───────────────────────────────────────────────────────────
 function renderAlertBanner(selectedDate) {
+  _alertDate = selectedDate;
   const banner  = document.getElementById('alertBanner');
   const content = document.getElementById('alertContent');
-  const dateAlerts = _allAlerts.filter(a => a.date === selectedDate);
+  const label   = document.getElementById('alertPeriodLabel');
 
-  if (!dateAlerts.length) { banner.style.display = 'none'; return; }
+  const periodAlerts = filterByPeriod(_allAlerts, selectedDate, _alertPeriod);
+  if (!periodAlerts.length) { banner.style.display = 'none'; return; }
 
-  // ── Count how many times each winner surpassed others ──
+  label.textContent = periodLabel(selectedDate, _alertPeriod);
+
+  // ── Winner count ranking ──
   const winCount = {};
-  dateAlerts.forEach(a => {
+  periodAlerts.forEach(a => {
     const key = `${a.winner_id}|${a.winner_name}`;
     winCount[key] = (winCount[key] || 0) + 1;
   });
-  const topWinners = Object.entries(winCount)
-    .sort((a, b) => b[1] - a[1]);
+  const topWinners = Object.entries(winCount).sort((a,b) => b[1]-a[1]);
 
   const summaryHtml = topWinners.map(([key, n]) => {
     const [id, name] = key.split('|');
-    return `<span style="background:rgba(0,200,5,.12);border:1px solid rgba(0,200,5,.3);
+    return `<span style="background:rgba(0,200,5,.1);border:1px solid rgba(0,200,5,.25);
       border-radius:20px;padding:2px 10px;font-size:.78rem;white-space:nowrap;display:inline-flex;align-items:center;gap:5px">
       <span style="color:var(--green);font-weight:700">${id} ${name}</span>
-      <span style="background:var(--accent);color:#000;border-radius:10px;padding:0 6px;font-size:.72rem;font-weight:800">${n}次</span>
+      <span style="background:var(--accent);color:#000;border-radius:10px;padding:0 7px;font-size:.72rem;font-weight:800">${n}次</span>
     </span>`;
   }).join('');
 
-  // ── Detail rows ──
-  const detailHtml = dateAlerts.map(a => {
-    const wCap = (a.winner_cap / 1e8).toFixed(0);
-    const lCap = (a.loser_cap  / 1e8).toFixed(0);
-    const tierColor = a.tier === '兆' ? '#a78bfa' : a.tier === '五千億' ? '#38bdf8' : '#fb923c';
-    return `
-      <span style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
-        border-radius:8px;padding:3px 10px;font-size:.78rem;white-space:nowrap">
-        <span style="background:${tierColor}22;color:${tierColor};border-radius:4px;padding:1px 5px;font-size:.68rem;margin-right:4px">${a.tier}</span>
-        <span style="color:var(--green);font-weight:600">${a.winner_id} ${a.winner_name}</span>
-        <span style="color:var(--muted);margin:0 4px;font-size:.75rem">超越</span>
-        <span style="color:var(--red)">${a.loser_id} ${a.loser_name}</span>
-        <span style="color:var(--muted);font-size:.7rem;margin-left:5px">${parseInt(wCap).toLocaleString()} vs ${parseInt(lCap).toLocaleString()} 億</span>
-      </span>`;
-  }).join('');
+  // ── Detail rows (day only to avoid overwhelming) ──
+  let detailHtml = '';
+  if (_alertPeriod === 'day') {
+    detailHtml = `<div style="display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.4rem">` +
+      periodAlerts.map(a => {
+        const wCap = (a.winner_cap/1e8).toFixed(0);
+        const lCap = (a.loser_cap/1e8).toFixed(0);
+        const tc = a.tier==='兆'?'#a78bfa':a.tier==='五千億'?'#38bdf8':'#fb923c';
+        return `<span style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
+          border-radius:8px;padding:3px 9px;font-size:.77rem;white-space:nowrap">
+          <span style="background:${tc}22;color:${tc};border-radius:4px;padding:1px 5px;font-size:.67rem;margin-right:3px">${a.tier}</span>
+          <span style="color:var(--green);font-weight:600">${a.winner_id} ${a.winner_name}</span>
+          <span style="color:var(--muted);margin:0 4px;font-size:.74rem">超越</span>
+          <span style="color:var(--red)">${a.loser_id} ${a.loser_name}</span>
+          <span style="color:var(--muted);font-size:.69rem;margin-left:4px">${parseInt(wCap).toLocaleString()} vs ${parseInt(lCap).toLocaleString()} 億</span>
+        </span>`;
+      }).join('') + `</div>`;
+  } else {
+    // For week/month: show total count and unique companies
+    const totalCrossings = periodAlerts.length;
+    const uniqueWinners  = topWinners.length;
+    detailHtml = `<span style="color:var(--muted);font-size:.75rem;margin-top:.3rem;display:block">
+      共 ${totalCrossings} 次超越事件，${uniqueWinners} 間公司曾超越他人
+    </span>`;
+  }
 
-  content.innerHTML = `
-    <div style="width:100%">
-      <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.4rem">
-        <span style="color:var(--accent);font-size:.78rem;font-weight:700;letter-spacing:.05em;white-space:nowrap">
-          <i class="fa-solid fa-bell me-1"></i>${selectedDate} 異動統計
-        </span>
-        ${summaryHtml}
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:.35rem">${detailHtml}</div>
-    </div>`;
+  content.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:.35rem;align-items:center">${summaryHtml}</div>${detailHtml}`;
   banner.style.display = 'block';
 }
 
