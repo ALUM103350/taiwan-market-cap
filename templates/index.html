@@ -919,7 +919,7 @@ function renderAlertHistory(selectedDate) {
     const diff      = ((a.winner_cap - a.loser_cap) / 1e8).toFixed(0);
     const isSelected = a.date === selectedDate;
     const bg        = isSelected ? 'background:#1a2e6e' : idx % 2 === 0 ? 'background:#0f1e5a' : 'background:#0b1746';
-    const tierColor = a.tier === '兆' ? '#a78bfa' : a.tier === '五千億' ? '#38bdf8' : '#fb923c';
+    const tierColor = a.tier === '兆' ? '#a78bfa' : a.tier === '五千億' ? '#38bdf8' : a.tier === '千億' ? '#fb923c' : '#f43f5e';
     return `
       <tr style="${bg};border-bottom:1px solid #162266${isSelected ? ';outline:1px solid #1d2a78' : ''}">
         <td style="padding:.55rem .75rem;white-space:nowrap;color:var(--muted);font-size:.78rem">

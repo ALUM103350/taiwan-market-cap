@@ -54,13 +54,16 @@ def api_stock_history(stock_id):
 TIER_TRILLION  = 1_000_000_000_000   # 1兆
 TIER_500B      =   500_000_000_000   # 5000億
 TIER_100B      =   100_000_000_000   # 1000億
+TIER_50B       =    50_000_000_000   # 500億
 
 def _tier_label(cap):
     if cap >= TIER_TRILLION:
         return "兆"
     if cap >= TIER_500B:
         return "五千億"
-    return "千億"
+    if cap >= TIER_100B:
+        return "千億"
+    return "五百億"
 
 @app.route("/api/alerts")
 def api_alerts():
