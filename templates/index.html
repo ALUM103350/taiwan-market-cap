@@ -860,50 +860,68 @@ function _renderBannerContent(refDate) {
     return;
   }
 
-  // ── Winner count ranking ──
-  const winCount = {};
+  // ── Tier helper ──
+  const TIERS = ['兆','五千億','千億','五百億'];
+  const tierColor = t => t==='兆'?'#a78bfa':t==='五千億'?'#38bdf8':t==='千億'?'#fb923c':'#f43f5e';
+
+  // ── Group alerts by tier ──
+  const byTier = {};
+  TIERS.forEach(t => { byTier[t] = []; });
   periodAlerts.forEach(a => {
-    const key = `${a.winner_id}|${a.winner_name}`;
-    winCount[key] = (winCount[key] || 0) + 1;
+    if (byTier[a.tier]) byTier[a.tier].push(a);
   });
-  const topWinners = Object.entries(winCount).sort((a,b) => b[1]-a[1]);
+  const activeTiers = TIERS.filter(t => byTier[t].length > 0);
 
-  const summaryHtml = topWinners.map(([key, n]) => {
-    const [id, name] = key.split('|');
-    return `<span style="background:rgba(0,200,5,.1);border:1px solid rgba(0,200,5,.25);
-      border-radius:20px;padding:2px 10px;font-size:.78rem;white-space:nowrap;display:inline-flex;align-items:center;gap:5px">
-      <span style="color:var(--green);font-weight:700">${id} ${name}</span>
-      <span style="background:var(--accent);color:#000;border-radius:10px;padding:0 7px;font-size:.72rem;font-weight:800">${n}次</span>
-    </span>`;
-  }).join('');
+  // ── Build tier sections ──
+  const tiersHtml = activeTiers.map(tier => {
+    const alerts = byTier[tier];
+    const tc = tierColor(tier);
 
-  // ── Detail rows (day only to avoid overwhelming) ──
-  let detailHtml = '';
-  if (_alertPeriod === 'day' || (periodAlerts.length <= 15 && _alertPeriod !== 'month')) {
-    detailHtml = `<div style="display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.4rem">` +
-      periodAlerts.map(a => {
-        const wCap = (a.winner_cap/1e8).toFixed(0);
-        const lCap = (a.loser_cap/1e8).toFixed(0);
-        const tc = a.tier==='兆'?'#a78bfa':a.tier==='五千億'?'#38bdf8':'#fb923c';
-        return `<span style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
-          border-radius:8px;padding:3px 9px;font-size:.77rem;white-space:nowrap">
-          <span style="background:${tc}22;color:${tc};border-radius:4px;padding:1px 5px;font-size:.67rem;margin-right:3px">${a.tier}</span>
-          <span style="color:var(--green);font-weight:600">${a.winner_id} ${a.winner_name}</span>
-          <span style="color:var(--muted);margin:0 4px;font-size:.74rem">超越</span>
-          <span style="color:var(--red)">${a.loser_id} ${a.loser_name}</span>
-          <span style="color:var(--muted);font-size:.69rem;margin-left:4px">${parseInt(wCap).toLocaleString()} vs ${parseInt(lCap).toLocaleString()} 億</span>
-        </span>`;
-      }).join('') + `</div>`;
-  } else {
-    // For week/month: show total count and unique companies
-    const totalCrossings = periodAlerts.length;
-    const uniqueWinners  = topWinners.length;
-    detailHtml = `<span style="color:var(--muted);font-size:.75rem;margin-top:.3rem;display:block">
-      共 ${totalCrossings} 次超越事件，${uniqueWinners} 間公司曾超越他人
-    </span>`;
-  }
+    // Winner count for this tier
+    const winCount = {};
+    alerts.forEach(a => {
+      const key = `${a.winner_id}|${a.winner_name}`;
+      winCount[key] = (winCount[key] || 0) + 1;
+    });
+    const topWinners = Object.entries(winCount).sort((a,b) => b[1]-a[1]);
 
-  content.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:.35rem;align-items:center">${summaryHtml}</div>${detailHtml}`;
+    const winnersHtml = topWinners.map(([key, n]) => {
+      const [id, name] = key.split('|');
+      return `<span style="background:${tc}12;border:1px solid ${tc}33;
+        border-radius:20px;padding:2px 9px;font-size:.77rem;white-space:nowrap;display:inline-flex;align-items:center;gap:4px">
+        <span style="color:${tc};font-weight:700">${id} ${name}</span>
+        <span style="background:${tc};color:#000;border-radius:10px;padding:0 6px;font-size:.7rem;font-weight:800">${n}次</span>
+      </span>`;
+    }).join('');
+
+    // Detail rows for day view or short week lists
+    let detailHtml = '';
+    if (_alertPeriod === 'day' || alerts.length <= 8) {
+      detailHtml = `<div style="display:flex;flex-wrap:wrap;gap:.25rem;margin-top:.3rem">` +
+        alerts.map(a => {
+          const wCap = parseInt((a.winner_cap/1e8).toFixed(0)).toLocaleString();
+          const lCap = parseInt((a.loser_cap/1e8).toFixed(0)).toLocaleString();
+          return `<span style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);
+            border-radius:7px;padding:2px 8px;font-size:.75rem;white-space:nowrap">
+            <span style="color:var(--green);font-weight:600">${a.winner_id} ${a.winner_name}</span>
+            <span style="color:var(--muted);margin:0 3px;font-size:.72rem">超越</span>
+            <span style="color:var(--red)">${a.loser_id} ${a.loser_name}</span>
+            <span style="color:var(--muted);font-size:.68rem;margin-left:3px">${wCap} vs ${lCap} 億</span>
+          </span>`;
+        }).join('') + `</div>`;
+    }
+
+    return `<div style="margin-bottom:.5rem">
+      <div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;margin-bottom:.25rem">
+        <span style="background:${tc}22;color:${tc};border-radius:5px;padding:1px 8px;font-size:.72rem;font-weight:700;white-space:nowrap">${tier}</span>
+        ${winnersHtml}
+        <span style="color:var(--muted);font-size:.7rem">共${alerts.length}次</span>
+      </div>
+      ${detailHtml}
+    </div>`;
+  }).join('<div style="border-top:1px solid #162266;margin:.4rem 0"></div>');
+
+  content.innerHTML = tiersHtml;
   banner.style.display = 'block';
 }
 
