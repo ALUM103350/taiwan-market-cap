@@ -120,8 +120,10 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
 <div id="alertBanner" style="display:none;background:linear-gradient(90deg,#0b1746,#162266);border-bottom:2px solid var(--accent);padding:.6rem 1.5rem">
   <!-- Period tabs + navigation -->
   <div style="display:flex;gap:.4rem;margin-bottom:.5rem;align-items:center;flex-wrap:wrap">
-    <span style="color:var(--accent);font-size:.75rem;font-weight:700;margin-right:.3rem;white-space:nowrap">
+    <span style="color:var(--accent);font-size:.75rem;font-weight:700;margin-right:.3rem;white-space:nowrap;cursor:pointer"
+      onclick="toggleAlertBody()">
       <i class="fa-solid fa-bell me-1"></i>異動統計
+      <i id="alertCollapseIcon" class="fa-solid fa-chevron-up ms-1" style="font-size:.65rem;color:var(--muted)"></i>
     </span>
     <button class="alert-tab active" data-p="day"   onclick="setAlertPeriod(this)">當日</button>
     <button class="alert-tab"        data-p="week"  onclick="setAlertPeriod(this)">每週</button>
@@ -135,7 +137,9 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
         color:var(--text);border-radius:6px;padding:1px 9px;cursor:pointer;font-size:.82rem">›</button>
     </div>
   </div>
-  <div id="alertContent"></div>
+  <div id="alertBody" style="overflow:hidden;transition:max-height .25s ease">
+    <div id="alertContent"></div>
+  </div>
 </div>
 
 <!-- Main -->
@@ -882,6 +886,19 @@ async function loadAlerts(selectedDate) {
     renderAlertBanner(selectedDate);
     renderAlertHistory(selectedDate);
   } catch(e) { console.error('alerts error', e); }
+}
+
+// ── Alert collapse ────────────────────────────────────────────────────────────
+let _alertCollapsed = false;
+function toggleAlertBody() {
+  _alertCollapsed = !_alertCollapsed;
+  const body = document.getElementById('alertBody');
+  const icon = document.getElementById('alertCollapseIcon');
+  body.style.maxHeight = _alertCollapsed ? '0' : '';
+  body.style.marginTop = _alertCollapsed ? '0' : '';
+  icon.className = _alertCollapsed
+    ? 'fa-solid fa-chevron-down ms-1'
+    : 'fa-solid fa-chevron-up ms-1';
 }
 
 // ── Period helpers ────────────────────────────────────────────────────────────
