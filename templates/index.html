@@ -813,24 +813,35 @@ async function runMAScreener() {
     body.innerHTML = MA_TIERS.filter(t => byTier[t].length).map(tier => {
       const tc = MA_TIER_COLOR(tier);
       const stocks = byTier[tier];
+      // MA columns config: [key, label, color]
+      const MA_COLS = [
+        ['ma3',  '3MA',  '#00c805'],
+        ['ma10', '10MA', '#4ade80'],
+        ['ma20', '20MA', '#86efac'],
+        ['ma30', '30MA', '#a3e635'],
+        ['ma40', '40MA', '#bef264'],
+        ['ma50', '50MA', '#d9f99d'],
+        ['ma60', '60MA', '#94a3b8'],
+        ['ma120','120MA','#64748b'],
+      ];
+      const base = s => s.ma120 || s.ma60 || 1;
+
       const rows = stocks.map((s, i) => `
         <tr style="border-bottom:1px solid #162266">
-          <td style="padding:.55rem .6rem;color:var(--muted);font-size:.77rem">${i+1}</td>
-          <td style="padding:.55rem .6rem">
+          <td style="padding:.5rem .5rem;color:var(--muted);font-size:.75rem">${i+1}</td>
+          <td style="padding:.5rem .5rem">
             <a href="#" class="stock-link" onclick="showHistory('${s.stock_id}','${s.stock_name}');return false">${s.stock_id}</a>
           </td>
-          <td style="padding:.55rem .6rem;color:var(--text);font-size:.84rem">${s.stock_name}</td>
-          <td style="padding:.55rem .6rem;color:var(--text);font-weight:600">${s.cap_yi.toLocaleString()}</td>
-          <td style="padding:.55rem .6rem;color:var(--green)">${s.ma3.toLocaleString()}</td>
-          <td style="padding:.55rem .6rem;color:#86efac">${s.ma10.toLocaleString()}</td>
-          <td style="padding:.55rem .6rem;color:var(--muted)">${s.ma30.toLocaleString()}</td>
-          <td style="padding:.55rem .6rem;color:var(--muted)">${s.ma60.toLocaleString()}</td>
-          <td style="padding:.55rem .6rem">
-            <div style="display:flex;gap:2px;align-items:center">
-              ${['ma3','ma10','ma30','ma60'].map((m,j) => {
-                const h = Math.min(100, Math.round(s[m] / s.ma60 * 60));
-                const c = ['#00c805','#4ade80','#86efac','#bbf7d0'][j];
-                return `<div style="width:5px;height:${h}%;background:${c};border-radius:2px;min-height:4px"></div>`;
+          <td style="padding:.5rem .5rem;color:var(--text);font-size:.82rem;white-space:nowrap">${s.stock_name}</td>
+          <td style="padding:.5rem .5rem;color:var(--text);font-weight:600;white-space:nowrap">${s.cap_yi.toLocaleString()}</td>
+          ${MA_COLS.map(([m, , c]) => `
+            <td style="padding:.5rem .45rem;color:${c};font-size:.8rem;white-space:nowrap">${s[m] != null ? s[m].toLocaleString() : '—'}</td>
+          `).join('')}
+          <td style="padding:.5rem .5rem">
+            <div style="display:flex;gap:2px;align-items:flex-end;height:22px">
+              ${MA_COLS.map(([m,, c]) => {
+                const h = s[m] ? Math.max(3, Math.min(22, Math.round(s[m] / base(s) * 16))) : 3;
+                return `<div style="width:4px;height:${h}px;background:${c};border-radius:2px"></div>`;
               }).join('')}
             </div>
           </td>
@@ -843,18 +854,15 @@ async function runMAScreener() {
             <span style="color:var(--muted);font-size:.77rem">${stocks.length} 檔</span>
           </div>
           <div style="overflow-x:auto">
-            <table style="width:100%;border-collapse:collapse;font-size:.82rem">
+            <table style="width:100%;border-collapse:collapse;font-size:.82rem;white-space:nowrap">
               <thead>
-                <tr style="color:var(--muted);font-size:.7rem;text-transform:uppercase">
-                  <th style="padding:.4rem .6rem">#</th>
-                  <th style="padding:.4rem .6rem">代號</th>
-                  <th style="padding:.4rem .6rem">名稱</th>
-                  <th style="padding:.4rem .6rem">市值(億)</th>
-                  <th style="padding:.4rem .6rem;color:var(--green)">3MA</th>
-                  <th style="padding:.4rem .6rem;color:#86efac">10MA</th>
-                  <th style="padding:.4rem .6rem">30MA</th>
-                  <th style="padding:.4rem .6rem">60MA</th>
-                  <th style="padding:.4rem .6rem">強度</th>
+                <tr style="color:var(--muted);font-size:.68rem;text-transform:uppercase;background:#0f1e5a">
+                  <th style="padding:.4rem .5rem">#</th>
+                  <th style="padding:.4rem .5rem">代號</th>
+                  <th style="padding:.4rem .5rem">名稱</th>
+                  <th style="padding:.4rem .5rem">市值(億)</th>
+                  ${MA_COLS.map(([,l,c]) => `<th style="padding:.4rem .45rem;color:${c}">${l}</th>`).join('')}
+                  <th style="padding:.4rem .5rem">強度</th>
                 </tr>
               </thead>
               <tbody>${rows}</tbody>

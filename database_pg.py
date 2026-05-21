@@ -165,7 +165,7 @@ class Database:
                 rows = cur.fetchall()
                 return [dict(r) for r in reversed(rows)]
 
-    def get_all_cap_history(self, days=60):
+    def get_all_cap_history(self, days=120):
         """Return last N days of market cap for all stocks (for MA screener)."""
         with self.get_conn() as conn:
             with conn.cursor() as cur:

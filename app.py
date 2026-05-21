@@ -69,7 +69,7 @@ def _tier_label(cap):
 def screener_ma():
     """Stocks where market cap 3MA > 10MA > 30MA > 60MA."""
     from collections import defaultdict
-    rows = db.get_all_cap_history(days=60)
+    rows = db.get_all_cap_history(days=120)
     if not rows:
         return jsonify([])
 
@@ -86,10 +86,14 @@ def screener_ma():
         caps = [h["market_cap"] for h in history]
         if len(caps) < 10:
             continue
-        ma3  = avg(caps, 3)
-        ma10 = avg(caps, 10)
-        ma30 = avg(caps, 30)
-        ma60 = avg(caps, 60)
+        ma3   = avg(caps, 3)
+        ma10  = avg(caps, 10)
+        ma20  = avg(caps, 20)
+        ma30  = avg(caps, 30)
+        ma40  = avg(caps, 40)
+        ma50  = avg(caps, 50)
+        ma60  = avg(caps, 60)
+        ma120 = avg(caps, 120)
         if ma3 > ma10 > ma30 > ma60 > 0:
             latest = history[0]
             cap = latest["market_cap"]
@@ -98,11 +102,15 @@ def screener_ma():
                 "stock_name": latest["stock_name"],
                 "market_cap": cap,
                 "tier":       _tier_label(cap),
-                "ma3":        round(ma3  / 1e8, 1),
-                "ma10":       round(ma10 / 1e8, 1),
-                "ma30":       round(ma30 / 1e8, 1),
-                "ma60":       round(ma60 / 1e8, 1),
-                "cap_yi":     round(cap  / 1e8, 1),
+                "ma3":        round(ma3   / 1e8, 1),
+                "ma10":       round(ma10  / 1e8, 1),
+                "ma20":       round(ma20  / 1e8, 1),
+                "ma30":       round(ma30  / 1e8, 1),
+                "ma40":       round(ma40  / 1e8, 1),
+                "ma50":       round(ma50  / 1e8, 1),
+                "ma60":       round(ma60  / 1e8, 1),
+                "ma120":      round(ma120 / 1e8, 1),
+                "cap_yi":     round(cap   / 1e8, 1),
                 "days_used":  len(caps),
             })
 

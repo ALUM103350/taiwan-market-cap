@@ -153,7 +153,7 @@ class Database:
             rows = cur.fetchall()
             return [dict(r) for r in reversed(rows)]
 
-    def get_all_cap_history(self, days=60):
+    def get_all_cap_history(self, days=120):
         with self.get_conn() as conn:
             cur = conn.execute("""
                 SELECT stock_id, stock_name, date, market_cap
