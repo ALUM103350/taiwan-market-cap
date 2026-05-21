@@ -65,6 +65,51 @@ def _tier_label(cap):
         return "千億"
     return "五百億"
 
+@app.route("/api/screener/ma")
+def screener_ma():
+    """Stocks where market cap 3MA > 10MA > 30MA > 60MA."""
+    from collections import defaultdict
+    rows = db.get_all_cap_history(days=60)
+    if not rows:
+        return jsonify([])
+
+    by_stock = defaultdict(list)
+    for r in rows:
+        by_stock[r["stock_id"]].append(r)
+
+    def avg(lst, n):
+        sub = [x for x in lst[:n] if x > 0]
+        return sum(sub) / len(sub) if sub else 0
+
+    results = []
+    for sid, history in by_stock.items():
+        caps = [h["market_cap"] for h in history]
+        if len(caps) < 10:
+            continue
+        ma3  = avg(caps, 3)
+        ma10 = avg(caps, 10)
+        ma30 = avg(caps, 30)
+        ma60 = avg(caps, 60)
+        if ma3 > ma10 > ma30 > ma60 > 0:
+            latest = history[0]
+            cap = latest["market_cap"]
+            results.append({
+                "stock_id":   sid,
+                "stock_name": latest["stock_name"],
+                "market_cap": cap,
+                "tier":       _tier_label(cap),
+                "ma3":        round(ma3  / 1e8, 1),
+                "ma10":       round(ma10 / 1e8, 1),
+                "ma30":       round(ma30 / 1e8, 1),
+                "ma60":       round(ma60 / 1e8, 1),
+                "cap_yi":     round(cap  / 1e8, 1),
+                "days_used":  len(caps),
+            })
+
+    results.sort(key=lambda x: x["market_cap"], reverse=True)
+    return jsonify(results)
+
+
 @app.route("/api/alerts")
 def api_alerts():
     """偵測兆級（>=1兆）及五千億級（5000億~1兆）公司歷史排名交叉事件。"""

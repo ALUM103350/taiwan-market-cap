@@ -165,6 +165,23 @@ class Database:
                 rows = cur.fetchall()
                 return [dict(r) for r in reversed(rows)]
 
+    def get_all_cap_history(self, days=60):
+        """Return last N days of market cap for all stocks (for MA screener)."""
+        with self.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT stock_id, stock_name, date, market_cap
+                    FROM (
+                        SELECT stock_id, stock_name, date, market_cap,
+                               ROW_NUMBER() OVER (PARTITION BY stock_id ORDER BY date DESC) AS rn
+                        FROM market_cap
+                        WHERE market_cap > 0
+                    ) t
+                    WHERE rn <= %s
+                    ORDER BY stock_id, date DESC
+                """, (days,))
+                return [dict(r) for r in cur.fetchall()]
+
     def get_trillion_history(self):
         """Return all records where market_cap >= 5000億, ordered by date asc."""
         with self.get_conn() as conn:
