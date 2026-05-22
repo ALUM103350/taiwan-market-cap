@@ -190,18 +190,30 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
   <div class="card p-3 mb-4">
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
       <div class="section-title mb-0">
-        <i class="fa-solid fa-filter me-1" style="color:var(--accent)"></i>市值成長篩選器
-        <span style="color:var(--muted);font-size:.72rem;font-weight:400;margin-left:.5rem">3MA &gt; 10MA &gt; 30MA &gt; 60MA</span>
+        <i class="fa-solid fa-filter me-1" style="color:var(--accent)"></i>市值多頭排列
+        <span style="color:var(--muted);font-size:.72rem;font-weight:400;margin-left:.5rem">每3營業日為1期 · 3MA &gt; 10MA &gt; 30MA &gt; 60MA</span>
       </div>
-      <button id="maScreenerBtn" class="btn-refresh" onclick="runMAScreener()">
-        <i class="fa-solid fa-magnifying-glass-chart me-1"></i>執行篩選
+      <button id="maScreenerBtn" class="btn-refresh" onclick="loadScreener()">
+        <i class="fa-solid fa-magnifying-glass-chart me-1"></i>載入
       </button>
     </div>
+
+    <!-- Period navigation -->
+    <div id="maNavRow" style="display:none;align-items:center;gap:.5rem;margin-bottom:.75rem;flex-wrap:wrap" class="d-flex">
+      <button onclick="navScreener(-1)" style="background:#162266;border:1px solid #1d2a78;color:var(--text);border-radius:7px;padding:3px 12px;cursor:pointer;font-size:.85rem">‹</button>
+      <div style="text-align:center;min-width:200px">
+        <div id="maPeriodLabel" style="color:var(--text);font-size:.82rem;font-weight:600"></div>
+        <div id="maPeriodDates" style="color:var(--muted);font-size:.72rem"></div>
+      </div>
+      <button onclick="navScreener(1)" style="background:#162266;border:1px solid #1d2a78;color:var(--text);border-radius:7px;padding:3px 12px;cursor:pointer;font-size:.85rem">›</button>
+      <span id="maPeriodCount" style="color:var(--muted);font-size:.75rem;margin-left:.3rem"></span>
+    </div>
+
     <div id="maScreenerResult" style="display:none">
       <div id="maScreenerBody"></div>
     </div>
     <div id="maScreenerEmpty" style="color:var(--muted);font-size:.85rem;text-align:center;padding:1rem 0;display:none">
-      目前無符合條件的股票（3MA &gt; 10MA &gt; 30MA &gt; 60MA）
+      此期間無符合多頭排列的股票
     </div>
   </div>
 
@@ -782,101 +794,124 @@ async function refreshCompare() {
 }
 
 // ── MA Growth Screener ────────────────────────────────────────────────────────
-const MA_TIERS = ['兆','五千億','千億','五百億'];
-const MA_TIER_COLOR = t => t==='兆'?'#a78bfa':t==='五千億'?'#38bdf8':t==='千億'?'#fb923c':'#f43f5e';
-const MA_TIER_MIN   = {'兆':1e12,'五千億':5e11,'千億':1e11,'五百億':5e10};
+const MA_TIERS     = ['兆','五千億','千億','五百億'];
+const MA_TIER_CLR  = t => t==='兆'?'#a78bfa':t==='五千億'?'#38bdf8':t==='千億'?'#fb923c':'#f43f5e';
+const MA_COLS = [
+  ['ma3',  '3MA',  '#00c805'],['ma10','10MA','#4ade80'],
+  ['ma20', '20MA', '#86efac'],['ma30','30MA','#a3e635'],
+  ['ma40', '40MA', '#bef264'],['ma50','50MA','#d9f99d'],
+  ['ma60', '60MA', '#94a3b8'],['ma120','120MA','#64748b'],
+];
 
-async function runMAScreener() {
-  const btn  = document.getElementById('maScreenerBtn');
-  const body = document.getElementById('maScreenerBody');
-  const res  = document.getElementById('maScreenerResult');
-  const emp  = document.getElementById('maScreenerEmpty');
+let _screenerPeriods = [];
+let _screenerIdx     = -1;
+
+async function loadScreener(targetPeriod) {
+  const btn = document.getElementById('maScreenerBtn');
+  const res = document.getElementById('maScreenerResult');
+  const emp = document.getElementById('maScreenerEmpty');
+  const nav = document.getElementById('maNavRow');
 
   btn.disabled = true;
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>計算中…';
   res.style.display = 'none'; emp.style.display = 'none';
 
   try {
-    const r = await fetch('/api/screener/ma');
-    const data = await r.json();
+    // Load available periods if not yet loaded
+    if (!_screenerPeriods.length) {
+      const pr = await fetch('/api/screener/ma/periods');
+      _screenerPeriods = await pr.json();  // desc order
+    }
+    if (!_screenerPeriods.length) { emp.style.display='block'; btn.disabled=false; return; }
+
+    const period = targetPeriod || _screenerPeriods[0];
+    const r = await fetch(`/api/screener/ma?period=${period}`);
+    const json = await r.json();
 
     btn.disabled = false;
-    btn.innerHTML = '<i class="fa-solid fa-magnifying-glass-chart me-1"></i>重新篩選';
+    btn.innerHTML = '<i class="fa-solid fa-magnifying-glass-chart me-1"></i>重新載入';
 
-    if (!data.length) { emp.style.display = 'block'; return; }
+    _screenerIdx = json.period_index;
+    // Update nav
+    nav.style.display = 'flex';
+    document.getElementById('maPeriodLabel').textContent = `第 ${json.period_index+1} 期 / 共 ${json.total_periods} 期`;
+    document.getElementById('maPeriodDates').textContent = json.period_dates ? json.period_dates.join(' · ') : json.period_end;
+    document.getElementById('maPeriodCount').textContent = `符合 ${json.data.length} 檔`;
 
-    // Group by tier
-    const byTier = {};
-    MA_TIERS.forEach(t => byTier[t] = []);
-    data.forEach(s => { if (byTier[s.tier]) byTier[s.tier].push(s); });
-
-    body.innerHTML = MA_TIERS.filter(t => byTier[t].length).map(tier => {
-      const tc = MA_TIER_COLOR(tier);
-      const stocks = byTier[tier];
-      // MA columns config: [key, label, color]
-      const MA_COLS = [
-        ['ma3',  '3MA',  '#00c805'],
-        ['ma10', '10MA', '#4ade80'],
-        ['ma20', '20MA', '#86efac'],
-        ['ma30', '30MA', '#a3e635'],
-        ['ma40', '40MA', '#bef264'],
-        ['ma50', '50MA', '#d9f99d'],
-        ['ma60', '60MA', '#94a3b8'],
-        ['ma120','120MA','#64748b'],
-      ];
-      const base = s => s.ma120 || s.ma60 || 1;
-
-      const rows = stocks.map((s, i) => `
-        <tr style="border-bottom:1px solid #162266">
-          <td style="padding:.5rem .5rem;color:var(--muted);font-size:.75rem">${i+1}</td>
-          <td style="padding:.5rem .5rem">
-            <a href="#" class="stock-link" onclick="showHistory('${s.stock_id}','${s.stock_name}');return false">${s.stock_id}</a>
-          </td>
-          <td style="padding:.5rem .5rem;color:var(--text);font-size:.82rem;white-space:nowrap">${s.stock_name}</td>
-          <td style="padding:.5rem .5rem;color:var(--text);font-weight:600;white-space:nowrap">${s.cap_yi.toLocaleString()}</td>
-          ${MA_COLS.map(([m, , c]) => `
-            <td style="padding:.5rem .45rem;color:${c};font-size:.8rem;white-space:nowrap">${s[m] != null ? s[m].toLocaleString() : '—'}</td>
-          `).join('')}
-          <td style="padding:.5rem .5rem">
-            <div style="display:flex;gap:2px;align-items:flex-end;height:22px">
-              ${MA_COLS.map(([m,, c]) => {
-                const h = s[m] ? Math.max(3, Math.min(22, Math.round(s[m] / base(s) * 16))) : 3;
-                return `<div style="width:4px;height:${h}px;background:${c};border-radius:2px"></div>`;
-              }).join('')}
-            </div>
-          </td>
-        </tr>`).join('');
-
-      return `
-        <div style="margin-bottom:1rem">
-          <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem">
-            <span style="background:${tc}22;color:${tc};border-radius:6px;padding:2px 10px;font-size:.78rem;font-weight:700">${tier}</span>
-            <span style="color:var(--muted);font-size:.77rem">${stocks.length} 檔</span>
-          </div>
-          <div style="overflow-x:auto">
-            <table style="width:100%;border-collapse:collapse;font-size:.82rem;white-space:nowrap">
-              <thead>
-                <tr style="color:var(--muted);font-size:.68rem;text-transform:uppercase;background:#0f1e5a">
-                  <th style="padding:.4rem .5rem">#</th>
-                  <th style="padding:.4rem .5rem">代號</th>
-                  <th style="padding:.4rem .5rem">名稱</th>
-                  <th style="padding:.4rem .5rem">市值(億)</th>
-                  ${MA_COLS.map(([,l,c]) => `<th style="padding:.4rem .45rem;color:${c}">${l}</th>`).join('')}
-                  <th style="padding:.4rem .5rem">強度</th>
-                </tr>
-              </thead>
-              <tbody>${rows}</tbody>
-            </table>
-          </div>
-        </div>`;
-    }).join('<div style="border-top:1px solid #162266;margin:.5rem 0"></div>');
-
-    res.style.display = 'block';
+    renderScreenerTable(json.data, emp, res);
   } catch(e) {
     btn.disabled = false;
-    btn.innerHTML = '<i class="fa-solid fa-magnifying-glass-chart me-1"></i>執行篩選';
+    btn.innerHTML = '<i class="fa-solid fa-magnifying-glass-chart me-1"></i>載入';
     console.error(e);
   }
+}
+
+async function navScreener(delta) {
+  if (!_screenerPeriods.length) return;
+  // periods are in desc order; idx 0 = latest
+  // period_index is ascending; convert
+  const totalPeriods = _screenerPeriods.length;
+  const descIdx = totalPeriods - 1 - _screenerIdx;  // current in desc list
+  const newDescIdx = Math.max(0, Math.min(totalPeriods-1, descIdx - delta));
+  await loadScreener(_screenerPeriods[newDescIdx]);
+}
+
+function renderScreenerTable(data, emp, res) {
+  const body = document.getElementById('maScreenerBody');
+  if (!data.length) { emp.style.display='block'; res.style.display='none'; return; }
+  emp.style.display = 'none';
+
+  const byTier = {};
+  MA_TIERS.forEach(t => byTier[t]=[]);
+  data.forEach(s => { if (byTier[s.tier]) byTier[s.tier].push(s); });
+
+  body.innerHTML = MA_TIERS.filter(t => byTier[t].length).map(tier => {
+    const tc = MA_TIER_CLR(tier);
+    const stocks = byTier[tier];
+    const base = s => s.ma120 || s.ma60 || 1;
+
+    const rows = stocks.map((s, i) => `
+      <tr style="border-bottom:1px solid #162266">
+        <td style="padding:.48rem .5rem;color:var(--muted);font-size:.74rem">${i+1}</td>
+        <td style="padding:.48rem .5rem">
+          <a href="#" class="stock-link" onclick="showHistory('${s.stock_id}','${s.stock_name}');return false">${s.stock_id}</a>
+        </td>
+        <td style="padding:.48rem .5rem;font-size:.81rem;white-space:nowrap">${s.stock_name}</td>
+        <td style="padding:.48rem .5rem;font-weight:600;white-space:nowrap">${s.cap_yi.toLocaleString()}</td>
+        ${MA_COLS.map(([m,,c]) => `<td style="padding:.48rem .44rem;color:${c};font-size:.78rem;white-space:nowrap">${s[m]!=null?s[m].toLocaleString():'—'}</td>`).join('')}
+        <td style="padding:.48rem .5rem">
+          <div style="display:flex;gap:2px;align-items:flex-end;height:20px">
+            ${MA_COLS.map(([m,,c]) => {
+              const h = s[m] ? Math.max(2,Math.min(20,Math.round(s[m]/base(s)*14))) : 2;
+              return `<div style="width:4px;height:${h}px;background:${c};border-radius:2px"></div>`;
+            }).join('')}
+          </div>
+        </td>
+      </tr>`).join('');
+
+    return `
+      <div style="margin-bottom:1rem">
+        <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.35rem">
+          <span style="background:${tc}22;color:${tc};border-radius:6px;padding:2px 10px;font-size:.77rem;font-weight:700">${tier}</span>
+          <span style="color:var(--muted);font-size:.75rem">${stocks.length} 檔</span>
+        </div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:.8rem;white-space:nowrap">
+            <thead>
+              <tr style="color:var(--muted);font-size:.67rem;text-transform:uppercase;background:#0f1e5a">
+                <th style="padding:.38rem .5rem">#</th><th style="padding:.38rem .5rem">代號</th>
+                <th style="padding:.38rem .5rem">名稱</th><th style="padding:.38rem .5rem">市值(億)</th>
+                ${MA_COLS.map(([,l,c])=>`<th style="padding:.38rem .44rem;color:${c}">${l}</th>`).join('')}
+                <th style="padding:.38rem .5rem">強度</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }).join('<div style="border-top:1px solid #162266;margin:.4rem 0"></div>');
+
+  res.style.display = 'block';
 }
 
 // ── Trillion alerts ───────────────────────────────────────────────────────────

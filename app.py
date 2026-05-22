@@ -65,57 +65,132 @@ def _tier_label(cap):
         return "千億"
     return "五百億"
 
-@app.route("/api/screener/ma")
-def screener_ma():
-    """Stocks where market cap 3MA > 10MA > 30MA > 60MA."""
+def _build_periods(sorted_dates):
+    """Group sorted trading dates into non-overlapping 3-day periods.
+    Returns list of (period_end_date, [d1, d2, d3]).
+    """
+    periods = []
+    for i in range(0, len(sorted_dates) - 2, 3):
+        group = sorted_dates[i: i + 3]
+        if len(group) == 3:
+            periods.append((group[-1], group))
+    return periods
+
+
+def _compute_ma_screener(all_rows, up_to_period_idx, periods):
+    """Compute MA screener using 3-day period averages.
+    Returns list of stocks satisfying 3MA > 10MA > 30MA > 60MA.
+    """
     from collections import defaultdict
-    rows = db.get_all_cap_history(days=120)
-    if not rows:
-        return jsonify([])
 
-    by_stock = defaultdict(list)
-    for r in rows:
-        by_stock[r["stock_id"]].append(r)
+    # Build {stock_id: {date: market_cap}}
+    cap_map = defaultdict(dict)
+    names   = {}
+    for r in all_rows:
+        cap_map[r["stock_id"]][r["date"]] = r["market_cap"]
+        names[r["stock_id"]] = r["stock_name"]
 
-    def avg(lst, n):
-        sub = [x for x in lst[:n] if x > 0]
+    def pavg(lst, n):
+        sub = [x for x in lst[-n:] if x > 0]
         return sum(sub) / len(sub) if sub else 0
 
     results = []
-    for sid, history in by_stock.items():
-        caps = [h["market_cap"] for h in history]
-        if len(caps) < 10:
+    for sid, date_caps in cap_map.items():
+        # Build period-value series up to up_to_period_idx (inclusive)
+        period_vals = []
+        for _, dates in periods[: up_to_period_idx + 1]:
+            vals = [date_caps[d] for d in dates if d in date_caps and date_caps[d] > 0]
+            if vals:
+                period_vals.append(sum(vals) / len(vals))
+
+        if len(period_vals) < 3:
             continue
-        ma3   = avg(caps, 3)
-        ma10  = avg(caps, 10)
-        ma20  = avg(caps, 20)
-        ma30  = avg(caps, 30)
-        ma40  = avg(caps, 40)
-        ma50  = avg(caps, 50)
-        ma60  = avg(caps, 60)
-        ma120 = avg(caps, 120)
-        if ma3 > ma10 > ma30 > ma60 > 0:
-            latest = history[0]
-            cap = latest["market_cap"]
-            results.append({
-                "stock_id":   sid,
-                "stock_name": latest["stock_name"],
-                "market_cap": cap,
-                "tier":       _tier_label(cap),
-                "ma3":        round(ma3   / 1e8, 1),
-                "ma10":       round(ma10  / 1e8, 1),
-                "ma20":       round(ma20  / 1e8, 1),
-                "ma30":       round(ma30  / 1e8, 1),
-                "ma40":       round(ma40  / 1e8, 1),
-                "ma50":       round(ma50  / 1e8, 1),
-                "ma60":       round(ma60  / 1e8, 1),
-                "ma120":      round(ma120 / 1e8, 1),
-                "cap_yi":     round(cap   / 1e8, 1),
-                "days_used":  len(caps),
-            })
+
+        ma3   = pavg(period_vals, 3)
+        ma10  = pavg(period_vals, 10)
+        ma20  = pavg(period_vals, 20)
+        ma30  = pavg(period_vals, 30)
+        ma40  = pavg(period_vals, 40)
+        ma50  = pavg(period_vals, 50)
+        ma60  = pavg(period_vals, 60)
+        ma120 = pavg(period_vals, 120)
+
+        if not (ma3 > ma10 > ma30 > ma60 > 0):
+            continue
+
+        # Use last day of target period as representative cap
+        _, target_dates = periods[up_to_period_idx]
+        last_caps = [date_caps[d] for d in reversed(target_dates) if d in date_caps and date_caps[d] > 0]
+        cap = last_caps[0] if last_caps else period_vals[-1]
+
+        results.append({
+            "stock_id":    sid,
+            "stock_name":  names.get(sid, sid),
+            "market_cap":  cap,
+            "tier":        _tier_label(cap),
+            "cap_yi":      round(cap    / 1e8, 1),
+            "ma3":         round(ma3    / 1e8, 1),
+            "ma10":        round(ma10   / 1e8, 1),
+            "ma20":        round(ma20   / 1e8, 1),
+            "ma30":        round(ma30   / 1e8, 1),
+            "ma40":        round(ma40   / 1e8, 1),
+            "ma50":        round(ma50   / 1e8, 1),
+            "ma60":        round(ma60   / 1e8, 1),
+            "ma120":       round(ma120  / 1e8, 1),
+            "num_periods": len(period_vals),
+        })
 
     results.sort(key=lambda x: x["market_cap"], reverse=True)
-    return jsonify(results)
+    return results
+
+
+# Cache to avoid recomputing on every request
+_screener_cache = {}
+
+@app.route("/api/screener/ma/periods")
+def screener_periods():
+    """Return available 3-day period end dates (desc)."""
+    rows = db.get_all_cap_history(days=360)
+    if not rows:
+        return jsonify([])
+    dates_asc = sorted(set(r["date"] for r in rows))
+    periods = _build_periods(dates_asc)
+    return jsonify([p[0] for p in reversed(periods)])
+
+
+@app.route("/api/screener/ma")
+def screener_ma():
+    """Screener for a specific period (or latest). Uses 3-day period MAs."""
+    target = request.args.get("period")
+    rows = db.get_all_cap_history(days=360)
+    if not rows:
+        return jsonify([])
+
+    dates_asc = sorted(set(r["date"] for r in rows))
+    periods   = _build_periods(dates_asc)
+    if not periods:
+        return jsonify([])
+
+    # Find target period index
+    if target:
+        idx = next((i for i, (end, _) in enumerate(periods) if end == target), None)
+        if idx is None:
+            return jsonify({"error": "period not found"}), 404
+    else:
+        idx = len(periods) - 1   # latest
+
+    cache_key = f"ma_{idx}"
+    if cache_key not in _screener_cache:
+        _screener_cache[cache_key] = _compute_ma_screener(rows, idx, periods)
+
+    period_end, period_dates = periods[idx]
+    return jsonify({
+        "period_end":   period_end,
+        "period_dates": period_dates,
+        "period_index": idx,
+        "total_periods": len(periods),
+        "data": _screener_cache[cache_key],
+    })
 
 
 @app.route("/api/alerts")
