@@ -76,9 +76,9 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
 .modal-footer{border-top:1px solid #222}
 #stockChart canvas{max-height:220px}
 .alert-info-dark{background:rgba(0,200,5,.08);border:1px solid rgba(0,200,5,.2);color:var(--green);border-radius:8px;padding:.6rem 1rem;font-size:.83rem}
-.calc-tip{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;background:#1d2a78;color:#8899cc;border-radius:50%;font-size:.65rem;cursor:help;margin-left:4px;position:relative;font-style:normal;font-weight:700;vertical-align:middle}
-.calc-tip:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#0b1746;border:1px solid #1d2a78;color:#e2e8f0;font-size:.73rem;padding:6px 10px;border-radius:8px;width:240px;white-space:normal;line-height:1.5;z-index:999;font-weight:400;text-transform:none;letter-spacing:0;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.5)}
-.calc-tip:hover::before{content:'';position:absolute;bottom:calc(100% + 2px);left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:#1d2a78}
+.calc-tip{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;background:#1d2a78;color:#8899cc;border-radius:50%;font-size:.65rem;cursor:pointer;margin-left:4px;font-style:normal;font-weight:700;vertical-align:middle;user-select:none}
+.calc-tip:hover{background:#2a3a8a;color:var(--text)}
+#calcTipBox{display:none;position:fixed;background:#0f1e5a;border:1px solid #3b52a0;color:#e2e8f0;font-size:.8rem;padding:10px 14px;border-radius:10px;max-width:280px;line-height:1.6;z-index:9999;box-shadow:0 6px 24px rgba(0,0,0,.6);pointer-events:none}
 .collapse-btn{background:none;border:none;color:var(--muted);cursor:pointer;padding:2px 6px;border-radius:5px;font-size:.75rem;line-height:1;transition:color .15s}
 .collapse-btn:hover{color:var(--text)}
 .collapsible-body{overflow:hidden;transition:max-height .25s ease,opacity .2s ease;opacity:1}
@@ -122,6 +122,9 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
     <div style="color:var(--muted);font-size:.9rem" id="loadingMsg">載入中…</div>
   </div>
 </div>
+
+<!-- Tooltip box -->
+<div id="calcTipBox"></div>
 
 <!-- Alert banner -->
 <div id="alertBanner" style="display:none;background:linear-gradient(90deg,#0b1746,#162266);border-bottom:2px solid var(--accent);padding:.6rem 1.5rem">
@@ -1052,6 +1055,40 @@ async function loadAlerts(selectedDate) {
     renderAlertHistory(selectedDate);
   } catch(e) { console.error('alerts error', e); }
 }
+
+// ── Calc-tip click tooltip ────────────────────────────────────────────────────
+const _tipBox = document.getElementById('calcTipBox');
+let _tipVisible = false;
+
+document.addEventListener('click', e => {
+  const tip = e.target.closest('.calc-tip');
+  if (tip) {
+    const text = tip.getAttribute('data-tip');
+    _tipBox.textContent = text;
+    // Position near the clicked element
+    const rect = tip.getBoundingClientRect();
+    const boxW = 280;
+    let left = rect.left + rect.width / 2 - boxW / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - boxW - 8));
+    const top = rect.top > 160
+      ? rect.top - 10   // show above
+      : rect.bottom + 10; // show below
+    _tipBox.style.left   = left + 'px';
+    _tipBox.style.top    = (rect.top > 160 ? rect.top - _tipBox.offsetHeight - 10 : rect.bottom + 10) + 'px';
+    _tipBox.style.width  = boxW + 'px';
+    _tipBox.style.display = 'block';
+    // Reposition after render (height is now known)
+    requestAnimationFrame(() => {
+      if (rect.top > 160)
+        _tipBox.style.top = (rect.top - _tipBox.offsetHeight - 10) + 'px';
+    });
+    _tipVisible = true;
+    e.stopPropagation();
+  } else if (_tipVisible) {
+    _tipBox.style.display = 'none';
+    _tipVisible = false;
+  }
+});
 
 // ── Generic section collapse ──────────────────────────────────────────────────
 function toggleSection(bodyId, iconId) {
