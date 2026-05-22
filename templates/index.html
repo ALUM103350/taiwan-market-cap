@@ -76,6 +76,10 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
 .modal-footer{border-top:1px solid #222}
 #stockChart canvas{max-height:220px}
 .alert-info-dark{background:rgba(0,200,5,.08);border:1px solid rgba(0,200,5,.2);color:var(--green);border-radius:8px;padding:.6rem 1rem;font-size:.83rem}
+.collapse-btn{background:none;border:none;color:var(--muted);cursor:pointer;padding:2px 6px;border-radius:5px;font-size:.75rem;line-height:1;transition:color .15s}
+.collapse-btn:hover{color:var(--text)}
+.collapsible-body{overflow:hidden;transition:max-height .25s ease,opacity .2s ease;opacity:1}
+.collapsible-body.collapsed{max-height:0!important;opacity:0}
 .alert-tab{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--muted);border-radius:6px;padding:2px 10px;font-size:.74rem;cursor:pointer;transition:all .15s}
 .alert-tab:hover{background:rgba(255,255,255,.1);color:var(--text)}
 .alert-tab.active{background:var(--accent);border-color:var(--accent);color:#000;font-weight:700}
@@ -148,13 +152,17 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
   <!-- Free comparison -->
   <div class="card p-3 mb-4">
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-      <div class="section-title mb-0"><i class="fa-solid fa-chart-line me-1" style="color:var(--accent)"></i>自由比較</div>
+      <div class="section-title mb-0" style="cursor:pointer" onclick="toggleSection('cmpBody','cmpIcon')">
+        <i class="fa-solid fa-chart-line me-1" style="color:var(--accent)"></i>自由比較
+        <i id="cmpIcon" class="fa-solid fa-chevron-up collapse-btn ms-1"></i>
+      </div>
       <div class="d-flex gap-1">
         <button class="cmp-metric active" data-m="market_cap" onclick="setMetric(this)">市值</button>
         <button class="cmp-metric" data-m="close_price" onclick="setMetric(this)">股價</button>
         <button class="cmp-metric" data-m="pct" onclick="setMetric(this)">漲跌幅%</button>
       </div>
     </div>
+    <div id="cmpBody" class="collapsible-body">
     <div style="position:relative;margin-bottom:.75rem">
       <div class="d-flex gap-2 align-items-center flex-wrap">
         <div style="position:relative;flex:1;min-width:220px">
@@ -184,20 +192,23 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
         <span style="font-size:.88rem">搜尋並加入股票開始比較（最多 8 支）</span>
       </div>
     </div>
+    </div><!-- /cmpBody -->
   </div>
 
   <!-- MA Growth Screener -->
   <div class="card p-3 mb-4">
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-      <div class="section-title mb-0">
+      <div class="section-title mb-0" style="cursor:pointer" onclick="toggleSection('maScreenerBody2','maScreenerIcon')">
         <i class="fa-solid fa-filter me-1" style="color:var(--accent)"></i>市值多頭排列
         <span style="color:var(--muted);font-size:.72rem;font-weight:400;margin-left:.5rem">每3營業日為1期 · 3MA &gt; 10MA &gt; 30MA &gt; 60MA</span>
+        <i id="maScreenerIcon" class="fa-solid fa-chevron-up collapse-btn ms-1"></i>
       </div>
       <button id="maScreenerBtn" class="btn-refresh" onclick="loadScreener()">
         <i class="fa-solid fa-magnifying-glass-chart me-1"></i>載入
       </button>
     </div>
 
+    <div id="maScreenerBody2" class="collapsible-body">
     <!-- Period navigation -->
     <div id="maNavRow" style="display:none;align-items:center;gap:.5rem;margin-bottom:.75rem;flex-wrap:wrap" class="d-flex">
       <button onclick="navScreener(-1)" style="background:#162266;border:1px solid #1d2a78;color:var(--text);border-radius:7px;padding:3px 12px;cursor:pointer;font-size:.85rem">‹</button>
@@ -215,17 +226,21 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
     <div id="maScreenerEmpty" style="color:var(--muted);font-size:.85rem;text-align:center;padding:1rem 0;display:none">
       此期間無符合多頭排列的股票
     </div>
+    </div><!-- /maScreenerBody2 -->
   </div>
 
   <!-- Frequency leaderboard -->
   <div class="card p-3 mb-4" id="maFreqCard" style="display:none">
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-      <div class="section-title mb-0">
+      <div class="section-title mb-0" style="cursor:pointer" onclick="toggleSection('maFreqBodyWrap','maFreqIcon')">
         <i class="fa-solid fa-ranking-star me-1" style="color:var(--accent)"></i>多頭排列出現次數排行
         <span id="maFreqMeta" style="color:var(--muted);font-size:.72rem;font-weight:400;margin-left:.5rem"></span>
+        <i id="maFreqIcon" class="fa-solid fa-chevron-up collapse-btn ms-1"></i>
       </div>
     </div>
-    <div id="maFreqBody"></div>
+    <div id="maFreqBodyWrap" class="collapsible-body">
+      <div id="maFreqBody"></div>
+    </div>
   </div>
 
   <!-- Summary cards -->
@@ -260,11 +275,13 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
   <!-- Trillion crossover history -->
   <div id="alertHistoryCard" class="card p-3 mb-4" style="display:none">
     <div class="d-flex justify-content-between align-items-center mb-2">
-      <div class="section-title mb-0">
+      <div class="section-title mb-0" style="cursor:pointer" onclick="toggleSection('alertHistoryBody2','alertHistoryIcon')">
         <i class="fa-solid fa-bell me-1" style="color:var(--accent)"></i>兆級排名交叉紀錄
+        <i id="alertHistoryIcon" class="fa-solid fa-chevron-up collapse-btn ms-1"></i>
       </div>
       <span id="alertHistoryCount" style="font-size:.78rem;color:var(--muted)"></span>
     </div>
+    <div id="alertHistoryBody2" class="collapsible-body">
     <div style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:.84rem">
         <thead>
@@ -280,6 +297,7 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
         <tbody id="alertHistoryBody"></tbody>
       </table>
     </div>
+    </div><!-- /alertHistoryBody2 -->
   </div>
 
   <!-- No market cap warning -->
@@ -291,7 +309,11 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
 
   <!-- Data table -->
   <div class="card p-3">
-    <div class="section-title mb-2"><i class="fa-solid fa-table me-1"></i>完整排行榜</div>
+    <div class="section-title mb-2" style="cursor:pointer" onclick="toggleSection('mainTableWrap','mainTableIcon')">
+      <i class="fa-solid fa-table me-1"></i>完整排行榜
+      <i id="mainTableIcon" class="fa-solid fa-chevron-up collapse-btn ms-1"></i>
+    </div>
+    <div id="mainTableWrap" class="collapsible-body">
     <table id="mainTable" class="table table-sm" style="width:100%">
       <thead>
         <tr>
@@ -307,6 +329,7 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
       </thead>
       <tbody></tbody>
     </table>
+    </div><!-- /mainTableWrap -->
   </div>
 </div>
 
@@ -1019,6 +1042,16 @@ async function loadAlerts(selectedDate) {
     renderAlertBanner(selectedDate);
     renderAlertHistory(selectedDate);
   } catch(e) { console.error('alerts error', e); }
+}
+
+// ── Generic section collapse ──────────────────────────────────────────────────
+function toggleSection(bodyId, iconId) {
+  const body = document.getElementById(bodyId);
+  const icon = document.getElementById(iconId);
+  const collapsed = body.classList.toggle('collapsed');
+  icon.className = collapsed
+    ? 'fa-solid fa-chevron-down collapse-btn'
+    : 'fa-solid fa-chevron-up collapse-btn';
 }
 
 // ── Alert collapse ────────────────────────────────────────────────────────────
