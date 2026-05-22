@@ -217,6 +217,17 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
     </div>
   </div>
 
+  <!-- Frequency leaderboard -->
+  <div class="card p-3 mb-4" id="maFreqCard" style="display:none">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+      <div class="section-title mb-0">
+        <i class="fa-solid fa-ranking-star me-1" style="color:var(--accent)"></i>多頭排列出現次數排行
+        <span id="maFreqMeta" style="color:var(--muted);font-size:.72rem;font-weight:400;margin-left:.5rem"></span>
+      </div>
+    </div>
+    <div id="maFreqBody"></div>
+  </div>
+
   <!-- Summary cards -->
   <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
@@ -839,6 +850,7 @@ async function loadScreener(targetPeriod) {
     document.getElementById('maPeriodCount').textContent = `符合 ${json.data.length} 檔`;
 
     renderScreenerTable(json.data, emp, res);
+    loadFrequency();   // load frequency after screener
   } catch(e) {
     btn.disabled = false;
     btn.innerHTML = '<i class="fa-solid fa-magnifying-glass-chart me-1"></i>載入';
@@ -854,6 +866,84 @@ async function navScreener(delta) {
   const descIdx = totalPeriods - 1 - _screenerIdx;  // current in desc list
   const newDescIdx = Math.max(0, Math.min(totalPeriods-1, descIdx - delta));
   await loadScreener(_screenerPeriods[newDescIdx]);
+}
+
+// ── Frequency leaderboard ─────────────────────────────────────────────────────
+let _freqLoaded = false;
+
+async function loadFrequency() {
+  if (_freqLoaded) return;
+  try {
+    const r    = await fetch('/api/screener/ma/frequency');
+    const json = await r.json();
+    _freqLoaded = true;
+
+    const card = document.getElementById('maFreqCard');
+    const body = document.getElementById('maFreqBody');
+    const meta = document.getElementById('maFreqMeta');
+    if (!json.data.length) return;
+
+    const total = json.total_periods;
+    meta.textContent = `共 ${total} 期快照`;
+
+    const byTier = {};
+    MA_TIERS.forEach(t => byTier[t] = []);
+    json.data.forEach(s => { if (byTier[s.tier]) byTier[s.tier].push(s); });
+
+    body.innerHTML = MA_TIERS.filter(t => byTier[t].length).map(tier => {
+      const tc     = MA_TIER_CLR(tier);
+      const stocks = byTier[tier];
+
+      const rows = stocks.map((s, i) => {
+        const barW = s.pct;
+        const barClr = s.pct >= 80 ? '#00c805' : s.pct >= 50 ? '#4ade80' : s.pct >= 30 ? '#f59e0b' : '#94a3b8';
+        return `
+          <tr style="border-bottom:1px solid #162266">
+            <td style="padding:.48rem .5rem;color:var(--muted);font-size:.74rem">${i+1}</td>
+            <td style="padding:.48rem .5rem">
+              <a href="#" class="stock-link" onclick="showHistory('${s.stock_id}','${s.stock_name}');return false">${s.stock_id}</a>
+            </td>
+            <td style="padding:.48rem .5rem;font-size:.81rem;white-space:nowrap">${s.stock_name}</td>
+            <td style="padding:.48rem .5rem;color:var(--muted);font-size:.78rem;white-space:nowrap">${s.cap_yi.toLocaleString()} 億</td>
+            <td style="padding:.48rem .5rem;text-align:center">
+              <span style="color:var(--accent);font-weight:700;font-size:.9rem">${s.count}</span>
+              <span style="color:var(--muted);font-size:.72rem"> / ${total}</span>
+            </td>
+            <td style="padding:.48rem .75rem;min-width:120px">
+              <div style="background:#162266;border-radius:4px;height:8px;overflow:hidden">
+                <div style="width:${barW}%;background:${barClr};height:100%;border-radius:4px;transition:width .4s"></div>
+              </div>
+              <div style="color:var(--muted);font-size:.68rem;margin-top:2px">${s.pct}%</div>
+            </td>
+          </tr>`;
+      }).join('');
+
+      return `
+        <div style="margin-bottom:1rem">
+          <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.35rem">
+            <span style="background:${tc}22;color:${tc};border-radius:6px;padding:2px 10px;font-size:.77rem;font-weight:700">${tier}</span>
+            <span style="color:var(--muted);font-size:.75rem">${stocks.length} 檔</span>
+          </div>
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:.8rem">
+              <thead>
+                <tr style="color:var(--muted);font-size:.67rem;text-transform:uppercase;background:#0f1e5a">
+                  <th style="padding:.38rem .5rem">#</th>
+                  <th style="padding:.38rem .5rem">代號</th>
+                  <th style="padding:.38rem .5rem">名稱</th>
+                  <th style="padding:.38rem .5rem">市值</th>
+                  <th style="padding:.38rem .5rem;text-align:center">出現次數</th>
+                  <th style="padding:.38rem .75rem">出現率</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>`;
+    }).join('<div style="border-top:1px solid #162266;margin:.4rem 0"></div>');
+
+    card.style.display = 'block';
+  } catch(e) { console.error('frequency error', e); }
 }
 
 function renderScreenerTable(data, emp, res) {

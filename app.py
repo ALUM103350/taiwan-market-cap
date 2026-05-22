@@ -170,6 +170,47 @@ def screener_ma():
     })
 
 
+@app.route("/api/screener/ma/frequency")
+def screener_frequency():
+    """Count how many snapshot periods each stock appeared in the aligned list."""
+    from collections import Counter
+    rows = db.get_all_cap_history(days=360)
+    if not rows:
+        return jsonify({"total_periods": 0, "data": []})
+
+    dates_asc = sorted(set(r["date"] for r in rows))
+    snaps     = _snapshot_dates(dates_asc)
+    if not snaps:
+        return jsonify({"total_periods": 0, "data": []})
+
+    freq       = Counter()
+    stock_info = {}
+
+    for snap in snaps:
+        key = f"dma_{snap}"
+        if key not in _screener_cache:
+            _screener_cache[key] = _compute_daily_ma_screener(rows, snap)
+        for s in _screener_cache[key]:
+            freq[s["stock_id"]] += 1
+            stock_info[s["stock_id"]] = s   # keep latest info
+
+    results = []
+    for sid, cnt in freq.most_common():
+        s = stock_info[sid]
+        results.append({
+            "stock_id":      sid,
+            "stock_name":    s["stock_name"],
+            "market_cap":    s["market_cap"],
+            "tier":          s["tier"],
+            "cap_yi":        s["cap_yi"],
+            "count":         cnt,
+            "total_periods": len(snaps),
+            "pct":           round(cnt / len(snaps) * 100),
+        })
+
+    return jsonify({"total_periods": len(snaps), "data": results})
+
+
 @app.route("/api/alerts")
 def api_alerts():
     """偵測兆級（>=1兆）及五千億級（5000億~1兆）公司歷史排名交叉事件。"""
