@@ -76,6 +76,9 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
 .modal-footer{border-top:1px solid #222}
 #stockChart canvas{max-height:220px}
 .alert-info-dark{background:rgba(0,200,5,.08);border:1px solid rgba(0,200,5,.2);color:var(--green);border-radius:8px;padding:.6rem 1rem;font-size:.83rem}
+.calc-tip{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;background:#1d2a78;color:#8899cc;border-radius:50%;font-size:.65rem;cursor:help;margin-left:4px;position:relative;font-style:normal;font-weight:700;vertical-align:middle}
+.calc-tip:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#0b1746;border:1px solid #1d2a78;color:#e2e8f0;font-size:.73rem;padding:6px 10px;border-radius:8px;width:240px;white-space:normal;line-height:1.5;z-index:999;font-weight:400;text-transform:none;letter-spacing:0;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.5)}
+.calc-tip:hover::before{content:'';position:absolute;bottom:calc(100% + 2px);left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:#1d2a78}
 .collapse-btn{background:none;border:none;color:var(--muted);cursor:pointer;padding:2px 6px;border-radius:5px;font-size:.75rem;line-height:1;transition:color .15s}
 .collapse-btn:hover{color:var(--text)}
 .collapsible-body{overflow:hidden;transition:max-height .25s ease,opacity .2s ease;opacity:1}
@@ -955,8 +958,14 @@ async function loadFrequency() {
                   <th style="padding:.38rem .5rem">代號</th>
                   <th style="padding:.38rem .5rem">名稱</th>
                   <th style="padding:.38rem .5rem">市值</th>
-                  <th style="padding:.38rem .5rem;text-align:center">出現次數</th>
-                  <th style="padding:.38rem .75rem">出現率</th>
+                  <th style="padding:.38rem .5rem;text-align:center">
+                    出現次數
+                    <span class="calc-tip" data-tip="共 ${total} 個快照期（每3個交易日取1期）中，該股同時符合 3MA &gt; 10MA &gt; 30MA &gt; 60MA 的期數">?</span>
+                  </th>
+                  <th style="padding:.38rem .75rem">
+                    出現率
+                    <span class="calc-tip" data-tip="出現次數 ÷ 總期數（${total}期）× 100%，越高代表多頭排列越穩定">?</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>${rows}</tbody>
