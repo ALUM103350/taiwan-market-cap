@@ -194,6 +194,70 @@ class Database:
                 """)
                 return [dict(r) for r in cur.fetchall()]
 
+    def get_tier_growth(self, tier, limit=50, days=60):
+        """Top N stocks in tier by latest market cap, with full history."""
+        tier_bounds = {
+            "兆":    (1_000_000_000_000, None),
+            "五千億": (500_000_000_000, 1_000_000_000_000),
+            "千億":   (100_000_000_000, 500_000_000_000),
+            "五百億": (50_000_000_000, 100_000_000_000),
+        }
+        lo, hi = tier_bounds.get(tier, (50_000_000_000, None))
+        with self.get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT MAX(date) AS d FROM market_cap WHERE market_cap > 0")
+                latest = cur.fetchone()["d"]
+                if not latest:
+                    return {"tier": tier, "latest_date": "", "labels": [], "datasets": []}
+
+                if hi:
+                    cur.execute("""
+                        SELECT stock_id, stock_name, market_cap
+                        FROM market_cap
+                        WHERE date=%s AND market_cap>=%s AND market_cap<%s
+                        ORDER BY market_cap DESC LIMIT %s
+                    """, (latest, lo, hi, limit))
+                else:
+                    cur.execute("""
+                        SELECT stock_id, stock_name, market_cap
+                        FROM market_cap
+                        WHERE date=%s AND market_cap>=%s
+                        ORDER BY market_cap DESC LIMIT %s
+                    """, (latest, lo, limit))
+                top_stocks = [dict(r) for r in cur.fetchall()]
+                if not top_stocks:
+                    return {"tier": tier, "latest_date": latest, "labels": [], "datasets": []}
+
+                stock_ids = [s["stock_id"] for s in top_stocks]
+                cur.execute("""
+                    SELECT stock_id, date, market_cap
+                    FROM (
+                        SELECT stock_id, date, market_cap,
+                               ROW_NUMBER() OVER (PARTITION BY stock_id ORDER BY date DESC) AS rn
+                        FROM market_cap
+                        WHERE stock_id = ANY(%s) AND market_cap > 0
+                    ) t WHERE rn <= %s
+                    ORDER BY date ASC
+                """, (stock_ids, days))
+                hist_rows = cur.fetchall()
+
+                labels = sorted(set(r["date"] for r in hist_rows))
+                by_stock = {}
+                for r in hist_rows:
+                    by_stock.setdefault(r["stock_id"], {})[r["date"]] = r["market_cap"]
+
+                datasets = []
+                for s in top_stocks:
+                    sid = s["stock_id"]
+                    hist = by_stock.get(sid, {})
+                    datasets.append({
+                        "stock_id":   sid,
+                        "stock_name": s["stock_name"],
+                        "market_cap": s["market_cap"],
+                        "data": [hist[d] / 1e8 if d in hist else None for d in labels],
+                    })
+                return {"tier": tier, "latest_date": latest, "labels": labels, "datasets": datasets}
+
     def get_summary(self, date_str):
         with self.get_conn() as conn:
             with conn.cursor() as cur:

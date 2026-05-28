@@ -201,6 +201,46 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
     </div><!-- /cmpBody -->
   </div>
 
+  <!-- Tier Growth Comparison -->
+  <div class="card p-3 mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+      <div class="section-title mb-0" style="cursor:pointer" onclick="toggleSection('tierGrowthBody','tierGrowthIcon')">
+        <i class="fa-solid fa-chart-area me-1" style="color:var(--accent)"></i>規模市值成長比較
+        <span style="color:var(--muted);font-size:.72rem;font-weight:400;margin-left:.5rem">每規模市值前50名歷史走勢</span>
+        <i id="tierGrowthIcon" class="fa-solid fa-chevron-up collapse-btn ms-1"></i>
+      </div>
+      <div class="d-flex gap-1 align-items-center flex-wrap">
+        <button id="tierNormBtn" class="cmp-metric" onclick="toggleTierNorm()">指數化</button>
+        <select id="tierDaysSelect" class="date-select" style="width:80px" onchange="loadTierGrowth()">
+          <option value="30">30天</option>
+          <option value="60" selected>60天</option>
+          <option value="90">90天</option>
+        </select>
+        <button id="tierLoadBtn" class="btn-refresh" onclick="loadTierGrowth()">
+          <i class="fa-solid fa-arrows-rotate me-1"></i>載入
+        </button>
+      </div>
+    </div>
+    <div id="tierGrowthBody" class="collapsible-body">
+      <!-- Tier tabs -->
+      <div class="d-flex gap-1 mb-2 flex-wrap">
+        <button class="alert-tab active" data-tier="兆"    onclick="setTierTab(this)">兆</button>
+        <button class="alert-tab"        data-tier="五千億" onclick="setTierTab(this)">五千億</button>
+        <button class="alert-tab"        data-tier="千億"  onclick="setTierTab(this)">千億</button>
+        <button class="alert-tab"        data-tier="五百億" onclick="setTierTab(this)">五百億</button>
+      </div>
+      <div id="tierGrowthMeta" style="color:var(--muted);font-size:.76rem;margin-bottom:.4rem"></div>
+      <div style="position:relative;height:400px">
+        <canvas id="tierGrowthChart"></canvas>
+        <div id="tierGrowthEmpty" style="position:absolute;inset:0;display:flex;flex-direction:column;
+          align-items:center;justify-content:center;color:var(--muted);gap:.5rem">
+          <i class="fa-solid fa-chart-area" style="font-size:2.2rem;opacity:.25"></i>
+          <span style="font-size:.88rem">點擊「載入」獲取資料</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- MA Growth Screener -->
   <div class="card p-3 mb-4">
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
@@ -500,6 +540,164 @@ async function loadData(dateStr) {
   } finally {
     hideLoading();
   }
+}
+
+// ── Tier Growth Chart ─────────────────────────────────────────────────────────
+const TIER_RGB = {
+  '兆':    '167,139,250',
+  '五千億': '56,189,248',
+  '千億':   '251,146,60',
+  '五百億': '244,63,94',
+};
+let _tierChart   = null;
+let _tierNorm    = false;
+let _currentTier = '兆';
+let _tierCache   = {};
+
+function setTierTab(btn) {
+  document.querySelectorAll('[data-tier]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _currentTier = btn.dataset.tier;
+  loadTierGrowth();
+}
+
+function toggleTierNorm() {
+  _tierNorm = !_tierNorm;
+  document.getElementById('tierNormBtn').classList.toggle('active', _tierNorm);
+  const key = `${_currentTier}_${document.getElementById('tierDaysSelect').value}`;
+  if (_tierCache[key]) renderTierChart(_tierCache[key]);
+}
+
+async function loadTierGrowth() {
+  const days = document.getElementById('tierDaysSelect').value;
+  const key  = `${_currentTier}_${days}`;
+  document.getElementById('tierGrowthEmpty').style.display = 'none';
+  const btn  = document.getElementById('tierLoadBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>載入中…';
+
+  try {
+    if (!_tierCache[key]) {
+      const res = await fetch(`/api/tier-growth?tier=${encodeURIComponent(_currentTier)}&days=${days}`);
+      _tierCache[key] = await res.json();
+    }
+    renderTierChart(_tierCache[key]);
+  } catch(e) { console.error('tier growth', e); }
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fa-solid fa-arrows-rotate me-1"></i>重新載入';
+}
+
+function renderTierChart(json) {
+  const meta  = document.getElementById('tierGrowthMeta');
+  const empty = document.getElementById('tierGrowthEmpty');
+
+  if (!json.datasets || !json.datasets.length) {
+    meta.textContent = '此規模暫無資料';
+    empty.style.display = 'flex';
+    if (_tierChart) { _tierChart.destroy(); _tierChart = null; }
+    return;
+  }
+  empty.style.display = 'none';
+
+  const rgb    = TIER_RGB[json.tier] || '0,200,5';
+  const labels = json.labels;
+  const n      = json.datasets.length;
+  meta.textContent = `${json.tier} · ${n} 檔 · 最新 ${json.latest_date}`;
+
+  const datasets = json.datasets.map((s, i) => {
+    // Rank-weighted opacity: top stocks brighter
+    const alpha = i < 5 ? 0.75 : i < 15 ? 0.45 : i < 30 ? 0.25 : 0.12;
+    const bw    = i < 5 ? 1.5 : 1;
+
+    let data = s.data;
+    if (_tierNorm) {
+      const base = data.find(v => v != null);
+      data = base ? data.map(v => v != null ? +((v / base * 100).toFixed(2)) : null) : data;
+    }
+    return {
+      label:            `${s.stock_id} ${s.stock_name}`,
+      data,
+      borderColor:      `rgba(${rgb},${alpha})`,
+      borderWidth:      bw,
+      pointRadius:      0,
+      pointHoverRadius: 5,
+      tension:          0.3,
+      spanGaps:         true,
+      _sid:  s.stock_id,
+      _name: s.stock_name,
+      _cap:  (s.market_cap / 1e8).toFixed(0),
+    };
+  });
+
+  // Average line
+  const avgData = labels.map((_, li) => {
+    const vals = json.datasets.map(s => s.data[li]).filter(v => v != null);
+    if (!vals.length) return null;
+    const avg = vals.reduce((a,b) => a+b, 0) / vals.length;
+    return _tierNorm
+      ? +(avg / (json.datasets[0].data.find(v => v != null) || 1) * 100).toFixed(2)
+      : +(avg.toFixed(1));
+  });
+  datasets.push({
+    label:       '平均',
+    data:        _tierNorm ? labels.map((_, li) => {
+      const vals = json.datasets.map(s => s.data[li]).filter(v => v != null);
+      if (!vals.length) return null;
+      const base = json.datasets[0].data.find(v => v != null) || 1;
+      return +((vals.reduce((a,b)=>a+b,0)/vals.length/base*100).toFixed(2));
+    }) : avgData,
+    borderColor:  `rgba(${rgb},1)`,
+    borderWidth:  2.5,
+    borderDash:   [5,3],
+    pointRadius:  0,
+    tension:      0.3,
+    spanGaps:     true,
+    _sid:  'AVG',
+    _name: '平均',
+    _cap:  '',
+  });
+
+  if (_tierChart) _tierChart.destroy();
+  const ctx = document.getElementById('tierGrowthChart').getContext('2d');
+  _tierChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 250 },
+      interaction: { mode: 'nearest', intersect: false, axis: 'xy' },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: ctx => ctx[0]?.label || '',
+            label: c => {
+              const ds = c.dataset;
+              const v  = c.parsed.y;
+              if (v == null) return null;
+              const val = _tierNorm
+                ? `${v.toFixed(1)}%`
+                : `${parseFloat(v).toLocaleString()} 億`;
+              const cap = ds._cap ? ` (現市值 ${parseInt(ds._cap).toLocaleString()} 億)` : '';
+              return ` ${ds._sid} ${ds._name}: ${val}${cap}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { grid: { color: '#162266' }, ticks: { color: '#8899cc', maxTicksLimit: 10, font: { size: 11 } } },
+        y: {
+          grid: { color: '#162266' },
+          ticks: {
+            color: '#8899cc',
+            font:  { size: 11 },
+            callback: v => _tierNorm ? v.toFixed(0) : v.toLocaleString() + ' 億'
+          }
+        }
+      }
+    }
+  });
 }
 
 // ── Bar charts ────────────────────────────────────────────────────────────────

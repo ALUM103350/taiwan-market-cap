@@ -211,6 +211,14 @@ def screener_frequency():
     return jsonify({"total_periods": len(snaps), "data": results})
 
 
+@app.route("/api/tier-growth")
+def tier_growth():
+    tier  = request.args.get("tier", "兆")
+    days  = request.args.get("days",  60, type=int)
+    limit = request.args.get("limit", 50, type=int)
+    return jsonify(db.get_tier_growth(tier, limit, days))
+
+
 @app.route("/api/alerts")
 def api_alerts():
     """偵測兆級（>=1兆）及五千億級（5000億~1兆）公司歷史排名交叉事件。"""
