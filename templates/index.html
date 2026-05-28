@@ -206,38 +206,39 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
       <div class="section-title mb-0" style="cursor:pointer" onclick="toggleSection('tierGrowthBody','tierGrowthIcon')">
         <i class="fa-solid fa-chart-area me-1" style="color:var(--accent)"></i>規模市值成長比較
-        <span style="color:var(--muted);font-size:.72rem;font-weight:400;margin-left:.5rem">每規模市值前50名歷史走勢</span>
+        <span style="color:var(--muted);font-size:.72rem;font-weight:400;margin-left:.5rem">依期間市值成長率排名，歷史曲線對比</span>
         <i id="tierGrowthIcon" class="fa-solid fa-chevron-up collapse-btn ms-1"></i>
       </div>
-      <div class="d-flex gap-1 align-items-center flex-wrap">
-        <button id="tierNormBtn" class="cmp-metric" onclick="toggleTierNorm()">指數化</button>
-        <select id="tierDaysSelect" class="date-select" style="width:80px" onchange="loadTierGrowth()">
-          <option value="30">30天</option>
-          <option value="60" selected>60天</option>
-          <option value="90">90天</option>
-        </select>
-        <button id="tierLoadBtn" class="btn-refresh" onclick="loadTierGrowth()">
-          <i class="fa-solid fa-arrows-rotate me-1"></i>載入
-        </button>
+      <div class="d-flex gap-1 flex-wrap">
+        <button class="cmp-metric" data-tdays="10" onclick="setTierDays(this)">10日</button>
+        <button class="cmp-metric" data-tdays="20" onclick="setTierDays(this)">20日</button>
+        <button class="cmp-metric" data-tdays="30" onclick="setTierDays(this)">30日</button>
+        <button class="cmp-metric" data-tdays="40" onclick="setTierDays(this)">40日</button>
+        <button class="cmp-metric active" data-tdays="50" onclick="setTierDays(this)">50日</button>
+        <button class="cmp-metric" data-tdays="60" onclick="setTierDays(this)">60日</button>
       </div>
     </div>
     <div id="tierGrowthBody" class="collapsible-body">
-      <!-- Tier tabs -->
-      <div class="d-flex gap-1 mb-2 flex-wrap">
-        <button class="alert-tab active" data-tier="兆"    onclick="setTierTab(this)">兆</button>
-        <button class="alert-tab"        data-tier="五千億" onclick="setTierTab(this)">五千億</button>
-        <button class="alert-tab"        data-tier="千億"  onclick="setTierTab(this)">千億</button>
-        <button class="alert-tab"        data-tier="五百億" onclick="setTierTab(this)">五百億</button>
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-1 mb-2">
+        <div class="d-flex gap-1 flex-wrap">
+          <button class="alert-tab active" data-tier="兆"    onclick="setTierTab(this)">兆</button>
+          <button class="alert-tab"        data-tier="五千億" onclick="setTierTab(this)">五千億</button>
+          <button class="alert-tab"        data-tier="千億"  onclick="setTierTab(this)">千億</button>
+          <button class="alert-tab"        data-tier="五百億" onclick="setTierTab(this)">五百億</button>
+        </div>
+        <div id="tierGrowthMeta" style="color:var(--muted);font-size:.76rem;text-align:right"></div>
       </div>
-      <div id="tierGrowthMeta" style="color:var(--muted);font-size:.76rem;margin-bottom:.4rem"></div>
-      <div style="position:relative;height:400px">
+      <div id="tierGrowthSubtitle" style="color:var(--muted);font-size:.74rem;margin-bottom:.4rem">
+        市值成長率（%）· 起始日 = 0% 基準 · 前5名線條較粗</div>
+      <div style="position:relative;height:360px">
         <canvas id="tierGrowthChart"></canvas>
         <div id="tierGrowthEmpty" style="position:absolute;inset:0;display:flex;flex-direction:column;
           align-items:center;justify-content:center;color:var(--muted);gap:.5rem">
           <i class="fa-solid fa-chart-area" style="font-size:2.2rem;opacity:.25"></i>
-          <span style="font-size:.88rem">點擊「載入」獲取資料</span>
+          <span style="font-size:.88rem">載入中…</span>
         </div>
       </div>
+      <div id="tierGrowthLegend" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:5px;margin-top:.75rem"></div>
     </div>
   </div>
 
@@ -500,7 +501,7 @@ async function loadDates() {
   const dates = await res.json();
   const sel = document.getElementById('dateSelect');
   sel.innerHTML = dates.map(d => `<option value="${d}">${d}</option>`).join('');
-  if (dates.length) { loadData(dates[0]); loadAlerts(dates[0]); }
+  if (dates.length) { loadData(dates[0]); loadAlerts(dates[0]); loadTierGrowth(); }
   else {
     document.getElementById('loadingOverlay').style.display = 'none';
     document.getElementById('noCapWarning').classList.remove('d-none');
@@ -543,16 +544,17 @@ async function loadData(dateStr) {
 }
 
 // ── Tier Growth Chart ─────────────────────────────────────────────────────────
-const TIER_RGB = {
-  '兆':    '167,139,250',
-  '五千億': '56,189,248',
-  '千億':   '251,146,60',
-  '五百億': '244,63,94',
-};
 let _tierChart   = null;
-let _tierNorm    = false;
 let _currentTier = '兆';
+let _tierDays    = 50;
 let _tierCache   = {};
+
+function rankColor(i, n) {
+  // i=0 → top performer (red), i=n-1 → bottom (teal)
+  const t = n <= 1 ? 0 : i / (n - 1);
+  const hue = Math.round(t * 145);   // 0=red → 145=teal-green
+  return `hsl(${hue},82%,62%)`;
+}
 
 function setTierTab(btn) {
   document.querySelectorAll('[data-tier]').forEach(b => b.classList.remove('active'));
@@ -561,101 +563,118 @@ function setTierTab(btn) {
   loadTierGrowth();
 }
 
-function toggleTierNorm() {
-  _tierNorm = !_tierNorm;
-  document.getElementById('tierNormBtn').classList.toggle('active', _tierNorm);
-  const key = `${_currentTier}_${document.getElementById('tierDaysSelect').value}`;
-  if (_tierCache[key]) renderTierChart(_tierCache[key]);
+function setTierDays(btn) {
+  document.querySelectorAll('[data-tdays]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _tierDays = parseInt(btn.dataset.tdays);
+  loadTierGrowth();
 }
 
 async function loadTierGrowth() {
-  const days = document.getElementById('tierDaysSelect').value;
-  const key  = `${_currentTier}_${days}`;
-  document.getElementById('tierGrowthEmpty').style.display = 'none';
-  const btn  = document.getElementById('tierLoadBtn');
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>載入中…';
-
+  const key = `${_currentTier}_${_tierDays}`;
   try {
     if (!_tierCache[key]) {
-      const res = await fetch(`/api/tier-growth?tier=${encodeURIComponent(_currentTier)}&days=${days}`);
+      document.getElementById('tierGrowthEmpty').style.display = 'flex';
+      const res = await fetch(`/api/tier-growth?tier=${encodeURIComponent(_currentTier)}&days=${_tierDays}`);
       _tierCache[key] = await res.json();
     }
     renderTierChart(_tierCache[key]);
   } catch(e) { console.error('tier growth', e); }
-  btn.disabled = false;
-  btn.innerHTML = '<i class="fa-solid fa-arrows-rotate me-1"></i>重新載入';
 }
 
+let _tierTooltipTop = new Set();
+
 function renderTierChart(json) {
-  const meta  = document.getElementById('tierGrowthMeta');
-  const empty = document.getElementById('tierGrowthEmpty');
+  const metaEl  = document.getElementById('tierGrowthMeta');
+  const emptyEl = document.getElementById('tierGrowthEmpty');
+  const legEl   = document.getElementById('tierGrowthLegend');
 
   if (!json.datasets || !json.datasets.length) {
-    meta.textContent = '此規模暫無資料';
-    empty.style.display = 'flex';
+    metaEl.textContent = '此規模暫無資料';
+    emptyEl.style.display = 'flex';
+    legEl.innerHTML = '';
     if (_tierChart) { _tierChart.destroy(); _tierChart = null; }
     return;
   }
-  empty.style.display = 'none';
+  emptyEl.style.display = 'none';
 
-  const rgb    = TIER_RGB[json.tier] || '0,200,5';
   const labels = json.labels;
-  const n      = json.datasets.length;
-  meta.textContent = `${json.tier} · ${n} 檔 · 最新 ${json.latest_date}`;
+  const n = json.datasets.length;
+  metaEl.textContent = `${n} 支 · 近 ${_tierDays} 個交易日`;
 
-  const datasets = json.datasets.map((s, i) => {
-    // Rank-weighted opacity: top stocks brighter
-    const alpha = i < 5 ? 0.75 : i < 15 ? 0.45 : i < 30 ? 0.25 : 0.12;
-    const bw    = i < 5 ? 1.5 : 1;
+  // Compute period % change for each stock (last vs first non-null)
+  const withPct = json.datasets.map(s => {
+    const vals = s.data.filter(v => v != null);
+    const base = vals[0] || 1;
+    const last = vals[vals.length - 1] || base;
+    return { ...s, _pct: (last / base - 1) * 100 };
+  });
+  // Sorted desc by % change → rank 0 = best
+  const ranked = [...withPct].sort((a, b) => b._pct - a._pct);
+  const rankMap = new Map(ranked.map((s, i) => [s.stock_id, i]));
 
-    let data = s.data;
-    if (_tierNorm) {
-      const base = data.find(v => v != null);
-      data = base ? data.map(v => v != null ? +((v / base * 100).toFixed(2)) : null) : data;
-    }
+  const datasets = withPct.map(s => {
+    const rank  = rankMap.get(s.stock_id);
+    const color = rankColor(rank, n);
+    const bw    = rank < 5 ? 2.5 : 1;
+    const base  = s.data.find(v => v != null) || 1;
+    const normData = s.data.map(v => v != null ? +((v / base * 100 - 100).toFixed(2)) : null);
     return {
       label:            `${s.stock_id} ${s.stock_name}`,
-      data,
-      borderColor:      `rgba(${rgb},${alpha})`,
+      data:             normData,
+      borderColor:      color,
       borderWidth:      bw,
       pointRadius:      0,
       pointHoverRadius: 5,
       tension:          0.3,
       spanGaps:         true,
-      _sid:  s.stock_id,
-      _name: s.stock_name,
-      _cap:  (s.market_cap / 1e8).toFixed(0),
+      _sid:   s.stock_id,
+      _name:  s.stock_name,
+      _cap:   Math.round(s.market_cap / 1e8),
+      _pct:   s._pct,
+      _rank:  rank,
     };
   });
 
-  // Average line
-  const avgData = labels.map((_, li) => {
-    const vals = json.datasets.map(s => s.data[li]).filter(v => v != null);
-    if (!vals.length) return null;
-    const avg = vals.reduce((a,b) => a+b, 0) / vals.length;
-    return _tierNorm
-      ? +(avg / (json.datasets[0].data.find(v => v != null) || 1) * 100).toFixed(2)
-      : +(avg.toFixed(1));
-  });
+  // Average overlay (white dashed)
   datasets.push({
     label:       '平均',
-    data:        _tierNorm ? labels.map((_, li) => {
-      const vals = json.datasets.map(s => s.data[li]).filter(v => v != null);
+    data: labels.map((_, li) => {
+      const vals = withPct.map(s => {
+        const base = s.data.find(v => v != null) || 1;
+        const v = s.data[li];
+        return v != null ? v / base * 100 - 100 : null;
+      }).filter(v => v != null);
       if (!vals.length) return null;
-      const base = json.datasets[0].data.find(v => v != null) || 1;
-      return +((vals.reduce((a,b)=>a+b,0)/vals.length/base*100).toFixed(2));
-    }) : avgData,
-    borderColor:  `rgba(${rgb},1)`,
-    borderWidth:  2.5,
+      return +(( vals.reduce((a,b)=>a+b,0)/vals.length ).toFixed(2));
+    }),
+    borderColor:  'rgba(255,255,255,0.5)',
+    borderWidth:  1.5,
     borderDash:   [5,3],
     pointRadius:  0,
     tension:      0.3,
     spanGaps:     true,
-    _sid:  'AVG',
-    _name: '平均',
-    _cap:  '',
+    _sid: 'AVG', _name: '平均', _cap: 0, _pct: 0, _rank: 9999,
   });
+
+  // Legend cards (sorted by rank = % change desc)
+  legEl.innerHTML = ranked.map((s, i) => {
+    const color   = rankColor(i, n);
+    const pct     = s._pct;
+    const pctStr  = (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%';
+    const capStr  = Math.round(s.market_cap / 1e8).toLocaleString() + ' 億';
+    const pctCol  = pct >= 0 ? 'var(--green)' : 'var(--red)';
+    return `<div style="background:#162266;border-radius:8px;padding:5px 9px;display:flex;align-items:center;gap:7px;min-width:0;border:1px solid #1d2a78">
+      <span style="font-size:.85rem;font-weight:800;color:${color};min-width:20px;text-align:center;flex-shrink:0">${i+1}</span>
+      <div style="min-width:0;flex:1;overflow:hidden">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:4px">
+          <span style="font-size:.77rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.stock_id} ${s.stock_name}</span>
+          <span style="font-size:.76rem;font-weight:700;color:${pctCol};flex-shrink:0">${pctStr}</span>
+        </div>
+        <div style="font-size:.69rem;color:var(--muted)">${capStr}</div>
+      </div>
+    </div>`;
+  }).join('');
 
   if (_tierChart) _tierChart.destroy();
   const ctx = document.getElementById('tierGrowthChart').getContext('2d');
@@ -665,34 +684,43 @@ function renderTierChart(json) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: 250 },
-      interaction: { mode: 'nearest', intersect: false, axis: 'xy' },
+      animation: { duration: 300 },
+      interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: {
+          backgroundColor: 'rgba(11,23,70,.92)',
+          borderColor: '#1d2a78',
+          borderWidth: 1,
+          padding: 10,
+          filter: item => item.dataset._sid !== 'AVG' && item.parsed.y != null,
+          itemSort: (a, b) => b.parsed.y - a.parsed.y,
           callbacks: {
             title: ctx => ctx[0]?.label || '',
+            beforeBody: items => {
+              _tierTooltipTop = new Set(items.slice(0, 5).map(i => i.dataset._sid));
+              return null;
+            },
             label: c => {
-              const ds = c.dataset;
-              const v  = c.parsed.y;
-              if (v == null) return null;
-              const val = _tierNorm
-                ? `${v.toFixed(1)}%`
-                : `${parseFloat(v).toLocaleString()} 億`;
-              const cap = ds._cap ? ` (現市值 ${parseInt(ds._cap).toLocaleString()} 億)` : '';
-              return ` ${ds._sid} ${ds._name}: ${val}${cap}`;
-            }
+              if (!_tierTooltipTop.has(c.dataset._sid)) return null;
+              const v = c.parsed.y;
+              return ` ${c.dataset._sid} ${c.dataset._name}   ${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
+            },
+            afterBody: items => items.length > 5 ? [`  … 共 ${items.length} 支有資料`] : [],
           }
         }
       },
       scales: {
-        x: { grid: { color: '#162266' }, ticks: { color: '#8899cc', maxTicksLimit: 10, font: { size: 11 } } },
+        x: {
+          grid: { color: 'rgba(22,34,102,.7)' },
+          ticks: { color: '#8899cc', maxTicksLimit: 10, font: { size: 11 } }
+        },
         y: {
-          grid: { color: '#162266' },
+          grid: { color: 'rgba(22,34,102,.7)' },
           ticks: {
             color: '#8899cc',
-            font:  { size: 11 },
-            callback: v => _tierNorm ? v.toFixed(0) : v.toLocaleString() + ' 億'
+            font: { size: 11 },
+            callback: v => (v >= 0 ? '+' : '') + v.toFixed(0) + '%'
           }
         }
       }
