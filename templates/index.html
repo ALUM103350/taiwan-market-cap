@@ -747,7 +747,7 @@ function renderTierChart(json) {
           callbacks: {
             title: ctx => ctx[0]?.label || '',
             beforeBody: items => {
-              _tierTooltipTop = new Set(items.slice(0, 5).map(i => i.dataset._sid));
+              _tierTooltipTop = new Set(items.slice(0, 10).map(i => i.dataset._sid));
               return null;
             },
             label: c => {
@@ -755,7 +755,7 @@ function renderTierChart(json) {
               const v = c.parsed.y;
               return ` ${c.dataset._sid} ${c.dataset._name}   ${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
             },
-            afterBody: items => items.length > 5 ? [`  … 共 ${items.length} 支有資料`] : [],
+            afterBody: items => items.length > 10 ? [`  … 共 ${items.length} 支有資料`] : [],
           }
         }
       },
@@ -881,7 +881,7 @@ function renderAbsChart(json) {
           callbacks: {
             title: ctx => ctx[0]?.label || '',
             beforeBody: items => {
-              _absTooltipTop = new Set(items.slice(0, 5).map(i => i.dataset._sid));
+              _absTooltipTop = new Set(items.slice(0, 10).map(i => i.dataset._sid));
               return null;
             },
             label: c => {
@@ -889,7 +889,7 @@ function renderAbsChart(json) {
               const v = c.parsed.y;
               return ` ${c.dataset._sid} ${c.dataset._name}   ${v != null ? Math.round(v).toLocaleString() + ' 億' : '—'}`;
             },
-            afterBody: items => items.length > 5 ? [`  … 共 ${items.length} 支有資料`] : [],
+            afterBody: items => items.length > 10 ? [`  … 共 ${items.length} 支有資料`] : [],
           }
         }
       },
