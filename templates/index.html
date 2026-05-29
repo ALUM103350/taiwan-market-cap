@@ -223,8 +223,12 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
         <div class="d-flex gap-1 flex-wrap">
           <button class="alert-tab active" data-tier="兆"    onclick="setTierTab(this)">兆</button>
           <button class="alert-tab"        data-tier="五千億" onclick="setTierTab(this)">五千億</button>
+          <button class="alert-tab"        data-tier="三千億" onclick="setTierTab(this)">三千億</button>
+          <button class="alert-tab"        data-tier="二千億" onclick="setTierTab(this)">二千億</button>
           <button class="alert-tab"        data-tier="千億"  onclick="setTierTab(this)">千億</button>
           <button class="alert-tab"        data-tier="五百億" onclick="setTierTab(this)">五百億</button>
+          <button class="alert-tab"        data-tier="二百億" onclick="setTierTab(this)">二百億</button>
+          <button class="alert-tab"        data-tier="百億"  onclick="setTierTab(this)">百億</button>
         </div>
         <div id="tierGrowthMeta" style="color:var(--muted);font-size:.76rem;text-align:right"></div>
       </div>
@@ -264,8 +268,12 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
         <div class="d-flex gap-1 flex-wrap">
           <button class="alert-tab active" data-abstier="兆"    onclick="setAbsTierTab(this)">兆</button>
           <button class="alert-tab"        data-abstier="五千億" onclick="setAbsTierTab(this)">五千億</button>
+          <button class="alert-tab"        data-abstier="三千億" onclick="setAbsTierTab(this)">三千億</button>
+          <button class="alert-tab"        data-abstier="二千億" onclick="setAbsTierTab(this)">二千億</button>
           <button class="alert-tab"        data-abstier="千億"  onclick="setAbsTierTab(this)">千億</button>
           <button class="alert-tab"        data-abstier="五百億" onclick="setAbsTierTab(this)">五百億</button>
+          <button class="alert-tab"        data-abstier="二百億" onclick="setAbsTierTab(this)">二百億</button>
+          <button class="alert-tab"        data-abstier="百億"  onclick="setAbsTierTab(this)">百億</button>
         </div>
         <div id="tierAbsMeta" style="color:var(--muted);font-size:.76rem;text-align:right"></div>
       </div>
@@ -1235,8 +1243,9 @@ async function refreshCompare() {
 }
 
 // ── MA Growth Screener ────────────────────────────────────────────────────────
-const MA_TIERS     = ['兆','五千億','千億','五百億'];
-const MA_TIER_CLR  = t => t==='兆'?'#a78bfa':t==='五千億'?'#38bdf8':t==='千億'?'#fb923c':'#f43f5e';
+const TIER_LIST   = ['兆','五千億','三千億','二千億','千億','五百億','二百億','百億'];
+const TIER_COLORS = {'兆':'#a78bfa','五千億':'#818cf8','三千億':'#38bdf8','二千億':'#2dd4bf','千億':'#4ade80','五百億':'#fb923c','二百億':'#f59e0b','百億':'#f43f5e'};
+function tierColor(t) { return TIER_COLORS[t] || '#8899cc'; }
 const MA_COLS = [
   ['ma3',  '3MA',  '#00c805'],['ma10','10MA','#4ade80'],
   ['ma20', '20MA', '#86efac'],['ma30','30MA','#a3e635'],
@@ -1317,11 +1326,11 @@ async function loadFrequency() {
     meta.textContent = `共 ${total} 期快照`;
 
     const byTier = {};
-    MA_TIERS.forEach(t => byTier[t] = []);
+    TIER_LIST.forEach(t => byTier[t] = []);
     json.data.forEach(s => { if (byTier[s.tier]) byTier[s.tier].push(s); });
 
-    body.innerHTML = MA_TIERS.filter(t => byTier[t].length).map(tier => {
-      const tc     = MA_TIER_CLR(tier);
+    body.innerHTML = TIER_LIST.filter(t => byTier[t].length).map(tier => {
+      const tc     = tierColor(tier);
       const stocks = byTier[tier];
 
       const rows = stocks.map((s, i) => {
@@ -1388,11 +1397,11 @@ function renderScreenerTable(data, emp, res) {
   emp.style.display = 'none';
 
   const byTier = {};
-  MA_TIERS.forEach(t => byTier[t]=[]);
+  TIER_LIST.forEach(t => byTier[t]=[]);
   data.forEach(s => { if (byTier[s.tier]) byTier[s.tier].push(s); });
 
-  body.innerHTML = MA_TIERS.filter(t => byTier[t].length).map(tier => {
-    const tc = MA_TIER_CLR(tier);
+  body.innerHTML = TIER_LIST.filter(t => byTier[t].length).map(tier => {
+    const tc = tierColor(tier);
     const stocks = byTier[tier];
     const base = s => s.ma120 || s.ma60 || 1;
 
@@ -1599,17 +1608,13 @@ function _renderBannerContent(refDate) {
     return;
   }
 
-  // ── Tier helper ──
-  const TIERS = ['兆','五千億','千億','五百億'];
-  const tierColor = t => t==='兆'?'#a78bfa':t==='五千億'?'#38bdf8':t==='千億'?'#fb923c':'#f43f5e';
-
   // ── Group alerts by tier ──
   const byTier = {};
-  TIERS.forEach(t => { byTier[t] = []; });
+  TIER_LIST.forEach(t => { byTier[t] = []; });
   periodAlerts.forEach(a => {
     if (byTier[a.tier]) byTier[a.tier].push(a);
   });
-  const activeTiers = TIERS.filter(t => byTier[t].length > 0);
+  const activeTiers = TIER_LIST.filter(t => byTier[t].length > 0);
 
   // ── Build tier sections ──
   const tiersHtml = activeTiers.map(tier => {
@@ -1676,7 +1681,7 @@ function renderAlertHistory(selectedDate) {
     const diff      = ((a.winner_cap - a.loser_cap) / 1e8).toFixed(0);
     const isSelected = a.date === selectedDate;
     const bg        = isSelected ? 'background:#1a2e6e' : idx % 2 === 0 ? 'background:#0f1e5a' : 'background:#0b1746';
-    const tierColor = a.tier === '兆' ? '#a78bfa' : a.tier === '五千億' ? '#38bdf8' : a.tier === '千億' ? '#fb923c' : '#f43f5e';
+    const tColor = tierColor(a.tier);
     return `
       <tr style="${bg};border-bottom:1px solid #162266${isSelected ? ';outline:1px solid #1d2a78' : ''}">
         <td style="padding:.55rem .75rem;white-space:nowrap;color:var(--muted);font-size:.78rem">
@@ -1684,7 +1689,7 @@ function renderAlertHistory(selectedDate) {
           ${a.date}
         </td>
         <td style="padding:.55rem .5rem;white-space:nowrap">
-          <span style="background:${tierColor}22;color:${tierColor};border-radius:4px;padding:1px 6px;font-size:.7rem">${a.tier}</span>
+          <span style="background:${tColor}22;color:${tColor};border-radius:4px;padding:1px 6px;font-size:.7rem">${a.tier}</span>
         </td>
         <td style="padding:.55rem .75rem">
           <span style="color:var(--green);font-weight:600">${a.winner_id}</span>

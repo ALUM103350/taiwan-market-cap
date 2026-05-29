@@ -189,7 +189,7 @@ class Database:
                 cur.execute("""
                     SELECT date, stock_id, stock_name, market_cap, market_cap_rank
                     FROM market_cap
-                    WHERE market_cap >= 50000000000
+                    WHERE market_cap >= 10000000000
                     ORDER BY date ASC, market_cap_rank ASC
                 """)
                 return [dict(r) for r in cur.fetchall()]
@@ -197,12 +197,16 @@ class Database:
     def get_tier_growth(self, tier, limit=50, days=60):
         """Top N stocks in tier by latest market cap, with full history."""
         tier_bounds = {
-            "兆":    (1_000_000_000_000, None),
-            "五千億": (500_000_000_000, 1_000_000_000_000),
-            "千億":   (100_000_000_000, 500_000_000_000),
-            "五百億": (50_000_000_000, 100_000_000_000),
+            "兆":    (1_000_000_000_000,           None),
+            "五千億": (  500_000_000_000, 1_000_000_000_000),
+            "三千億": (  300_000_000_000,   500_000_000_000),
+            "二千億": (  200_000_000_000,   300_000_000_000),
+            "千億":   (  100_000_000_000,   200_000_000_000),
+            "五百億": (   50_000_000_000,   100_000_000_000),
+            "二百億": (   20_000_000_000,    50_000_000_000),
+            "百億":   (   10_000_000_000,    20_000_000_000),
         }
-        lo, hi = tier_bounds.get(tier, (50_000_000_000, None))
+        lo, hi = tier_bounds.get(tier, (10_000_000_000, None))
         with self.get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT MAX(date) AS d FROM market_cap WHERE market_cap > 0")

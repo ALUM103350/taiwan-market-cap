@@ -51,19 +51,24 @@ def api_stock_history(stock_id):
     return jsonify(db.get_stock_history(stock_id, days))
 
 
-TIER_TRILLION  = 1_000_000_000_000   # 1兆
-TIER_500B      =   500_000_000_000   # 5000億
-TIER_100B      =   100_000_000_000   # 1000億
-TIER_50B       =    50_000_000_000   # 500億
+TIER_TRILLION  = 1_000_000_000_000   # 1兆   = 10,000億
+TIER_5000B     =   500_000_000_000   # 5,000億
+TIER_3000B     =   300_000_000_000   # 3,000億
+TIER_2000B     =   200_000_000_000   # 2,000億
+TIER_1000B     =   100_000_000_000   # 1,000億
+TIER_500B      =    50_000_000_000   # 500億
+TIER_200B      =    20_000_000_000   # 200億
+TIER_100B      =    10_000_000_000   # 100億
 
 def _tier_label(cap):
-    if cap >= TIER_TRILLION:
-        return "兆"
-    if cap >= TIER_500B:
-        return "五千億"
-    if cap >= TIER_100B:
-        return "千億"
-    return "五百億"
+    if cap >= TIER_TRILLION: return "兆"
+    if cap >= TIER_5000B:    return "五千億"
+    if cap >= TIER_3000B:    return "三千億"
+    if cap >= TIER_2000B:    return "二千億"
+    if cap >= TIER_1000B:    return "千億"
+    if cap >= TIER_500B:     return "五百億"
+    if cap >= TIER_200B:     return "二百億"
+    return "百億"
 
 def _snapshot_dates(all_dates_asc):
     """Every 3rd trading date becomes a snapshot date. Returns list asc."""
