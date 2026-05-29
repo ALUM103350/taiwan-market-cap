@@ -242,6 +242,47 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
     </div>
   </div>
 
+  <!-- Tier Absolute Cap History -->
+  <div class="card p-3 mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+      <div class="section-title mb-0" style="cursor:pointer" onclick="toggleSection('tierAbsBody','tierAbsIcon')">
+        <i class="fa-solid fa-chart-line me-1" style="color:var(--accent)"></i>規模市值歷史走勢
+        <span style="color:var(--muted);font-size:.72rem;font-weight:400;margin-left:.5rem">各規模前50名絕對市值（億）歷史對比</span>
+        <i id="tierAbsIcon" class="fa-solid fa-chevron-up collapse-btn ms-1"></i>
+      </div>
+      <div class="d-flex gap-1 flex-wrap">
+        <button class="cmp-metric" data-absdays="10" onclick="setAbsDays(this)">10日</button>
+        <button class="cmp-metric" data-absdays="20" onclick="setAbsDays(this)">20日</button>
+        <button class="cmp-metric" data-absdays="30" onclick="setAbsDays(this)">30日</button>
+        <button class="cmp-metric" data-absdays="40" onclick="setAbsDays(this)">40日</button>
+        <button class="cmp-metric active" data-absdays="50" onclick="setAbsDays(this)">50日</button>
+        <button class="cmp-metric" data-absdays="60" onclick="setAbsDays(this)">60日</button>
+      </div>
+    </div>
+    <div id="tierAbsBody" class="collapsible-body">
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-1 mb-2">
+        <div class="d-flex gap-1 flex-wrap">
+          <button class="alert-tab active" data-abstier="兆"    onclick="setAbsTierTab(this)">兆</button>
+          <button class="alert-tab"        data-abstier="五千億" onclick="setAbsTierTab(this)">五千億</button>
+          <button class="alert-tab"        data-abstier="千億"  onclick="setAbsTierTab(this)">千億</button>
+          <button class="alert-tab"        data-abstier="五百億" onclick="setAbsTierTab(this)">五百億</button>
+        </div>
+        <div id="tierAbsMeta" style="color:var(--muted);font-size:.76rem;text-align:right"></div>
+      </div>
+      <div style="color:var(--muted);font-size:.74rem;margin-bottom:.4rem">
+        絕對市值（億）· 依最新市值排名著色 · 前5名線條較粗</div>
+      <div style="position:relative;height:360px">
+        <canvas id="tierAbsChart"></canvas>
+        <div id="tierAbsEmpty" style="position:absolute;inset:0;display:flex;flex-direction:column;
+          align-items:center;justify-content:center;color:var(--muted);gap:.5rem">
+          <i class="fa-solid fa-chart-line" style="font-size:2.2rem;opacity:.25"></i>
+          <span style="font-size:.88rem">載入中…</span>
+        </div>
+      </div>
+      <div id="tierAbsLegend" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:5px;margin-top:.75rem"></div>
+    </div>
+  </div>
+
   <!-- MA Growth Screener -->
   <div class="card p-3 mb-4">
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
@@ -501,7 +542,7 @@ async function loadDates() {
   const dates = await res.json();
   const sel = document.getElementById('dateSelect');
   sel.innerHTML = dates.map(d => `<option value="${d}">${d}</option>`).join('');
-  if (dates.length) { loadData(dates[0]); loadAlerts(dates[0]); loadTierGrowth(); }
+  if (dates.length) { loadData(dates[0]); loadAlerts(dates[0]); loadTierGrowth(); loadAbsGrowth(); }
   else {
     document.getElementById('loadingOverlay').style.display = 'none';
     document.getElementById('noCapWarning').classList.remove('d-none');
@@ -721,6 +762,140 @@ function renderTierChart(json) {
             color: '#8899cc',
             font: { size: 11 },
             callback: v => (v >= 0 ? '+' : '') + v.toFixed(0) + '%'
+          }
+        }
+      }
+    }
+  });
+}
+
+// ── Tier Absolute Cap History ─────────────────────────────────────────────────
+let _absChart = null;
+let _absTier  = '兆';
+let _absDays  = 50;
+
+function setAbsTierTab(btn) {
+  document.querySelectorAll('[data-abstier]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _absTier = btn.dataset.abstier;
+  loadAbsGrowth();
+}
+
+function setAbsDays(btn) {
+  document.querySelectorAll('[data-absdays]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _absDays = parseInt(btn.dataset.absdays);
+  loadAbsGrowth();
+}
+
+async function loadAbsGrowth() {
+  const key = `${_absTier}_${_absDays}`;  // shares cache with loadTierGrowth
+  try {
+    if (!_tierCache[key]) {
+      document.getElementById('tierAbsEmpty').style.display = 'flex';
+      const res = await fetch(`/api/tier-growth?tier=${encodeURIComponent(_absTier)}&days=${_absDays}`);
+      _tierCache[key] = await res.json();
+    }
+    renderAbsChart(_tierCache[key]);
+  } catch(e) { console.error('abs growth', e); }
+}
+
+let _absTooltipTop = new Set();
+
+function renderAbsChart(json) {
+  const metaEl  = document.getElementById('tierAbsMeta');
+  const emptyEl = document.getElementById('tierAbsEmpty');
+  const legEl   = document.getElementById('tierAbsLegend');
+
+  if (!json.datasets || !json.datasets.length) {
+    metaEl.textContent = '此規模暫無資料';
+    emptyEl.style.display = 'flex';
+    legEl.innerHTML = '';
+    if (_absChart) { _absChart.destroy(); _absChart = null; }
+    return;
+  }
+  emptyEl.style.display = 'none';
+
+  const labels = json.labels;
+  const n = json.datasets.length;
+  metaEl.textContent = `${n} 支 · 近 ${_absDays} 個交易日`;
+
+  // API returns stocks sorted by market_cap DESC → rank 0 = highest
+  const datasets = json.datasets.map((s, i) => {
+    const color = rankColor(i, n);
+    return {
+      label:            `${s.stock_id} ${s.stock_name}`,
+      data:             s.data,   // already in 億
+      borderColor:      color,
+      borderWidth:      i < 5 ? 2.5 : 1,
+      pointRadius:      0,
+      pointHoverRadius: 5,
+      tension:          0.3,
+      spanGaps:         true,
+      _sid:  s.stock_id,
+      _name: s.stock_name,
+    };
+  });
+
+  legEl.innerHTML = json.datasets.map((s, i) => {
+    const color  = rankColor(i, n);
+    const capStr = Math.round(s.market_cap / 1e8).toLocaleString() + ' 億';
+    return `<div style="background:#162266;border-radius:8px;padding:5px 9px;display:flex;align-items:center;gap:7px;min-width:0;border:1px solid #1d2a78">
+      <span style="font-size:.85rem;font-weight:800;color:${color};min-width:20px;text-align:center;flex-shrink:0">${i+1}</span>
+      <div style="min-width:0;flex:1;overflow:hidden">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:4px">
+          <span style="font-size:.77rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.stock_id} ${s.stock_name}</span>
+          <span style="font-size:.76rem;font-weight:700;color:var(--accent);flex-shrink:0">${capStr}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  if (_absChart) _absChart.destroy();
+  const ctx = document.getElementById('tierAbsChart').getContext('2d');
+  _absChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 300 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(11,23,70,.92)',
+          borderColor: '#1d2a78',
+          borderWidth: 1,
+          padding: 10,
+          filter: item => item.parsed.y != null,
+          itemSort: (a, b) => b.parsed.y - a.parsed.y,
+          callbacks: {
+            title: ctx => ctx[0]?.label || '',
+            beforeBody: items => {
+              _absTooltipTop = new Set(items.slice(0, 5).map(i => i.dataset._sid));
+              return null;
+            },
+            label: c => {
+              if (!_absTooltipTop.has(c.dataset._sid)) return null;
+              const v = c.parsed.y;
+              return ` ${c.dataset._sid} ${c.dataset._name}   ${v != null ? Math.round(v).toLocaleString() + ' 億' : '—'}`;
+            },
+            afterBody: items => items.length > 5 ? [`  … 共 ${items.length} 支有資料`] : [],
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(22,34,102,.7)' },
+          ticks: { color: '#8899cc', maxTicksLimit: 10, font: { size: 11 } }
+        },
+        y: {
+          grid: { color: 'rgba(22,34,102,.7)' },
+          ticks: {
+            color: '#8899cc',
+            font: { size: 11 },
+            callback: v => v >= 10000 ? (v/10000).toFixed(1) + ' 兆' : Math.round(v).toLocaleString() + ' 億'
           }
         }
       }
