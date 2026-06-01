@@ -195,18 +195,18 @@ class Database:
                 return [dict(r) for r in cur.fetchall()]
 
     def get_tier_growth(self, tier, limit=50, days=60):
-        """Top N stocks in tier by latest market cap, with full history."""
-        tier_bounds = {
-            "兆":    (1_000_000_000_000,           None),
-            "五千億": (  500_000_000_000, 1_000_000_000_000),
-            "三千億": (  300_000_000_000,   500_000_000_000),
-            "二千億": (  200_000_000_000,   300_000_000_000),
-            "千億":   (  100_000_000_000,   200_000_000_000),
-            "五百億": (   50_000_000_000,   100_000_000_000),
-            "二百億": (   20_000_000_000,    50_000_000_000),
-            "百億":   (   10_000_000_000,    20_000_000_000),
+        """Top N stocks at or above tier floor by latest market cap, with full history."""
+        tier_floor = {
+            "兆":    1_000_000_000_000,
+            "五千億":   500_000_000_000,
+            "三千億":   300_000_000_000,
+            "二千億":   200_000_000_000,
+            "千億":     100_000_000_000,
+            "五百億":    50_000_000_000,
+            "二百億":    20_000_000_000,
+            "百億":      10_000_000_000,
         }
-        lo, hi = tier_bounds.get(tier, (10_000_000_000, None))
+        lo = tier_floor.get(tier, 10_000_000_000)
         with self.get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT MAX(date) AS d FROM market_cap WHERE market_cap > 0")
@@ -214,20 +214,12 @@ class Database:
                 if not latest:
                     return {"tier": tier, "latest_date": "", "labels": [], "datasets": []}
 
-                if hi:
-                    cur.execute("""
-                        SELECT stock_id, stock_name, market_cap
-                        FROM market_cap
-                        WHERE date=%s AND market_cap>=%s AND market_cap<%s
-                        ORDER BY market_cap DESC LIMIT %s
-                    """, (latest, lo, hi, limit))
-                else:
-                    cur.execute("""
-                        SELECT stock_id, stock_name, market_cap
-                        FROM market_cap
-                        WHERE date=%s AND market_cap>=%s
-                        ORDER BY market_cap DESC LIMIT %s
-                    """, (latest, lo, limit))
+                cur.execute("""
+                    SELECT stock_id, stock_name, market_cap
+                    FROM market_cap
+                    WHERE date=%s AND market_cap>=%s
+                    ORDER BY market_cap DESC LIMIT %s
+                """, (latest, lo, limit))
                 top_stocks = [dict(r) for r in cur.fetchall()]
                 if not top_stocks:
                     return {"tier": tier, "latest_date": latest, "labels": [], "datasets": []}
