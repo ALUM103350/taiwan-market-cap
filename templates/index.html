@@ -340,29 +340,37 @@ div.dataTables_wrapper div.dataTables_info{color:#888!important}
   </div>
 
   <!-- Summary cards -->
-  <div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
-      <div class="card card-sm">
-        <div class="stat-label">總市值</div>
-        <div class="stat-value" id="totalCap">—</div>
-      </div>
+  <div class="card p-3 mb-4">
+    <div class="section-title mb-0" style="cursor:pointer;margin-bottom:.75rem!important" onclick="toggleSection('summaryBody','summaryIcon')">
+      <i class="fa-solid fa-chart-pie me-1" style="color:var(--accent)"></i>市場概況
+      <i id="summaryIcon" class="fa-solid fa-chevron-up collapse-btn ms-1"></i>
     </div>
-    <div class="col-6 col-md-3">
-      <div class="card card-sm">
-        <div class="stat-label">上漲家數</div>
-        <div class="stat-value up" id="upCount">—</div>
-      </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="card card-sm">
-        <div class="stat-label">下跌家數</div>
-        <div class="stat-value down" id="downCount">—</div>
-      </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="card card-sm">
-        <div class="stat-label">上市家數</div>
-        <div class="stat-value" id="totalCount">—</div>
+    <div id="summaryBody" class="collapsible-body">
+      <div class="row g-3">
+        <div class="col-6 col-md-3">
+          <div class="card card-sm">
+            <div class="stat-label">總市值</div>
+            <div class="stat-value" id="totalCap">—</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card card-sm">
+            <div class="stat-label">上漲家數</div>
+            <div class="stat-value up" id="upCount">—</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card card-sm">
+            <div class="stat-label">下跌家數</div>
+            <div class="stat-value down" id="downCount">—</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card card-sm">
+            <div class="stat-label">上市家數</div>
+            <div class="stat-value" id="totalCount">—</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
