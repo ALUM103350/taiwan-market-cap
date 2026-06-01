@@ -639,7 +639,6 @@ async function loadTierGrowth() {
   } catch(e) { console.error('tier growth', e); }
 }
 
-let _tierTooltipTop = new Set();
 
 function renderTierChart(json) {
   const metaEl  = document.getElementById('tierGrowthMeta');
@@ -754,16 +753,10 @@ function renderTierChart(json) {
           itemSort: (a, b) => b.parsed.y - a.parsed.y,
           callbacks: {
             title: ctx => ctx[0]?.label || '',
-            beforeBody: items => {
-              _tierTooltipTop = new Set(items.slice(0, 10).map(i => i.dataset._sid));
-              return null;
-            },
             label: c => {
-              if (!_tierTooltipTop.has(c.dataset._sid)) return null;
               const v = c.parsed.y;
               return ` ${c.dataset._sid} ${c.dataset._name}   ${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
             },
-            afterBody: items => items.length > 10 ? [`  … 共 ${items.length} 支有資料`] : [],
           }
         }
       },
