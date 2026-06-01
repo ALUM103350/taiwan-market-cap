@@ -628,11 +628,11 @@ function setTierDays(btn) {
 }
 
 async function loadTierGrowth() {
-  const key = `${_currentTier}_${_tierDays}`;
+  const key = `${_currentTier}_${_tierDays}_50`;
   try {
     if (!_tierCache[key]) {
       document.getElementById('tierGrowthEmpty').style.display = 'flex';
-      const res = await fetch(`/api/tier-growth?tier=${encodeURIComponent(_currentTier)}&days=${_tierDays}`);
+      const res = await fetch(`/api/tier-growth?tier=${encodeURIComponent(_currentTier)}&days=${_tierDays}&limit=50`);
       _tierCache[key] = await res.json();
     }
     renderTierChart(_tierCache[key]);
@@ -805,11 +805,11 @@ function setAbsDays(btn) {
 }
 
 async function loadAbsGrowth() {
-  const key = `${_absTier}_${_absDays}`;  // shares cache with loadTierGrowth
+  const key = `${_absTier}_${_absDays}_50`;
   try {
     if (!_tierCache[key]) {
       document.getElementById('tierAbsEmpty').style.display = 'flex';
-      const res = await fetch(`/api/tier-growth?tier=${encodeURIComponent(_absTier)}&days=${_absDays}`);
+      const res = await fetch(`/api/tier-growth?tier=${encodeURIComponent(_absTier)}&days=${_absDays}&limit=50`);
       _tierCache[key] = await res.json();
     }
     renderAbsChart(_tierCache[key]);
